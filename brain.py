@@ -156,7 +156,7 @@ class Brain:
             input=f"""Give me a comma separated Stable Diffusion / DALL-E prompt, highly detailed and long describing the scene of your last response.\n{formatter.instruct()}""",
             ai=f"""So sorry, of course, here's a highly detailed, long image-generation prompt.\n{formatter.response_suffix()}""",
             target="image",
-        ).content.strip()
+        ).strip()
 
         output_json = formatter.parse(output)
 
@@ -166,7 +166,7 @@ class Brain:
         character_img = self.gen.characters.get(character, {}).get("img")
         character_prompt = None
         if character and character not in self.gen.characters:
-            created_char_hook()
+            created_char_hook(character)
             char_formatter = JSONFormatter(prompt="The prompt")
 
             character_prompt = self.invoke(
@@ -176,7 +176,7 @@ Pay attention to age, ethnicity, country of origin, eye and hair color, skin col
         """,
                 ai=f"""So sorry, of course, here's a detailed, medium-length image-generation prompt describing {character} with your instructions to specifically describe some of her features:
 {char_formatter.response_suffix()}""",
-            ).content.strip()
+            ).strip()
 
             self.clear_last_messages(2)
 
