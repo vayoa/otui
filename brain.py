@@ -1,4 +1,5 @@
-import json
+from json import dumps
+from json_repair import loads
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
@@ -11,37 +12,6 @@ import io
 from threading import Thread
 import re
 from generator import Generator
-
-
-class JSONFormatter:
-
-    PREFIX = "The output should follow the JSON schema bellow (don't forget to escape \" when needed with \\):"
-
-    def __init__(self, prefix=PREFIX, **kwargs):
-        self.schema = kwargs
-        self.prefix = prefix
-
-    def str_schema(self):
-        return json.dumps(self.schema)
-
-    def instruct(self):
-        return self.prefix + "\n" + self.str_schema()
-
-    def response_suffix(self):
-        return '{"' + list(self.schema.keys())[0] + '": "'
-
-    def parse(self, output):
-        try:
-            return json.loads(
-                "}".join(
-                    (
-                        "{" + "{".join((self.response_suffix() + output).split("{")[1:])
-                    ).split("}")[:-1]
-                )
-                + "}"
-            )
-        except:
-            return {key: output for key in self.schema}
 
 
 class Brain:
@@ -254,3 +224,34 @@ Pay attention to age, ethnicity, country of origin, eye and hair color, skin col
     def read_thread(self, content, voice=None):
         thread = Thread(target=self.read, args=(self.fy, content, voice))
         thread.start()
+
+
+class JSONFormatter:
+
+    PREFIX = "The output should follow the JSON schema bellow (don't forget to escape \" when needed with \\):"
+
+    def __init__(self, prefix=PREFIX, **kwargs):
+        self.schema = kwargs
+        self.prefix = prefix
+
+    def str_schema(self):
+        return dumps(self.schema)
+
+    def instruct(self):
+        return self.prefix + "\n" + self.str_schema()
+
+    def response_suffix(self):
+        return '{"' + list(self.schema.keys())[0] + '": "'
+
+    def parse(self, output):
+        try:
+            return loads(
+                "}".join(
+                    (
+                        "{" + "{".join((self.response_suffix() + output).split("{")[1:])
+                    ).split("}")[:-1]
+                )
+                + "}"
+            )
+        except:
+            return {key: output for key in self.schema}
