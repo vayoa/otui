@@ -48,6 +48,40 @@ class JSONFormatter:
         return {key: parsed[key] for key in parsed if key in done}
 
 
+class JSONFormatter:
+
+    PREFIX = "Respond only using the JSON schema bellow:"
+
+    def __init__(self, prefix=PREFIX, **kwargs):
+        self.schema = kwargs
+        self.prefix = prefix
+
+    def str_schema(self):
+        return dumps(self.schema)
+
+    def instruct(self):
+        return self.prefix + "\n" + self.str_schema()
+
+    def response_suffix(self):
+        return '{"' + list(self.schema.keys())[0] + '": "'
+
+    def parse(self, output):
+        try:
+            return loads(output)
+        except:
+            return {key: output for key in self.schema}
+
+    def parse_done(self, output):
+        pattern = """[\"']{key}[\"']:\s+[\"'].+[\"']\s*(?=,\s*|})"""
+        done = [
+            key
+            for key in self.schema
+            if re.search(pattern.replace("{key}", re.escape(key)), output) is not None
+        ]
+        parsed = self.parse(output)
+        return {key: parsed[key] for key in parsed if key in done}
+
+
 class Brain:
 
     @staticmethod
@@ -140,26 +174,12 @@ class Brain:
         formatter: JSONFormatter | None = None,
     ):
         target = self._target(target)
-        input, ai = Brain._handle_input(input, ai, formatter)
-
-        content = ai + target.invoke(
+        return target.invoke(
             {"input": input, "ai_input": ai},
             {"configurable": {"session_id": session_id}},
         ).content
-        
-        if formatter is not None:
-            return formatter.parse(content)
-        return content
 
-    def stream(
-        self,
-        input: str,
-        ai: str = "",
-        session_id: str = "unused",
-        target: str = "chain",
-        formatter: JSONFormatter | None = None,
-        only_done: bool = False,
-    ):
+    def stream(self, input, ai="", session_id="unused", target="chain"):
         target = self._target(target)
         input, ai = Brain._handle_input(input, ai, formatter)
 
@@ -330,20 +350,32 @@ Pay attention to age, ethnicity, country of origin, eye and hair color, skin col
         thread.start()
 
 
-if __name__ == "__main__":
-    from langchain_community.chat_models import ChatOllama
-    from rich import print
+class JSONFormatter:
 
-    llm = ChatOllama(model="llama3", system="", template="")
-    brain = Brain(llm)
-    formatter = JSONFormatter(name="your name", favorite_food="your favorite food")
+    PREFIX = "The output should follow the JSON schema bellow (don't forget to escape \" when needed with \\):"
 
-    params = {
-        "input": "Hey, who are you? write in detail!",
-        "formatter": formatter,
-    }
+    def __init__(self, prefix=PREFIX, **kwargs):
+        self.schema = kwargs
+        self.prefix = prefix
 
-    print(brain.invoke(**params))
+    def str_schema(self):
+        return dumps(self.schema)
 
-    for chunk, content in brain.stream(**params, only_done=True):
-        print(content)
+    def instruct(self):
+        return self.prefix + "\n" + self.str_schema()
+
+    def response_suffix(self):
+        return '{"' + list(self.schema.keys())[0] + '": "'
+
+    def parse(self, output):
+        try:
+            return loads(
+                "}".join(
+                    (
+                        "{" + "{".join((self.response_suffix() + output).split("{")[1:])
+                    ).split("}")[:-1]
+                )
+                + "}"
+            )
+        except:
+            return {key: output for key in self.schema}
