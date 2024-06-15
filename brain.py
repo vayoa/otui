@@ -40,12 +40,19 @@ class JSONFormatter:
 
     def parse_done(self, output):
         pattern = """[\"']{key}[\"']:\s+[\"'].+[\"']\s*(?=,\s*|})"""
+        # Find keys that were already fully completed
         done = [
             key
             for key in self.schema
-            if re.search(pattern.replace("{key}", re.escape(key)), output) is not None
+            if re.search(
+                pattern.replace("{key}", re.escape(key)),
+                output,
+                flags=re.MULTILINE | re.DOTALL,
+            )
+            is not None
         ]
         parsed = self.parse(output)
+        # Keep only the keys that have been fully completed
         return {key: parsed[key] for key in parsed if key in done}
 
 
@@ -335,14 +342,20 @@ if __name__ == "__main__":
 
     llm = ChatOllama(model="llama3", system="", template="")
     brain = Brain(llm)
-    formatter = JSONFormatter(name="your name", favorite_food="your favorite food")
+    formatter = JSONFormatter(
+        diffusion_prompt="A comma separated Stable Diffusion / DALL-E prompt, highly detailed and long describing the scene of your response.",
+        response="Your detailed text response",
+    )
 
     params = {
-        "input": "Hey, who are you? write in detail!",
+        "input": "Hey, who are you? I heard you're a llm? can you explain more?",
         "formatter": formatter,
     }
 
     # print(brain.invoke(**params))
 
     for chunk, content in brain.stream(**params):
-        print(chunk)
+        print(chunk.get("response"))
+    print()
+
+    print(content)
