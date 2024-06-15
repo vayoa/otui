@@ -1,5 +1,6 @@
 import argparse
 import tempfile
+from threading import Thread
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.progress import (
@@ -16,7 +17,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.key_binding import KeyBindings
 from langchain_community.chat_models import ChatOllama
-from brain import Brain
+from brain import Brain, JSONFormatter
 
 
 class CommandCompleter(Completer):
@@ -282,16 +283,49 @@ def main_loop(console, brain, auto_hijack=False, auto_show=False, img_dir=None):
             ai_input = hijack if hijack else "Sure, "
             user_input = user_input.replace("/hijack", "").lstrip()
 
+        formatter = JSONFormatter(
+            response="Your detailed roleplay game response to my message",
+            prompt="A comma separated Stable Diffusion / DALL-E prompt, highly detailed and long describing the scene of your response.",
+            prefix="""Split your response into 2 highly detailed parts:
+1. prompt - a scene description in the form of a stable diffusion prompt only describing how the scene looks
+2. response which is your actual text response the user sees of what happens in the game
+NOTICE HOW THE USER WOULD ONLY SEE the response ON HIS SCREEN! MEANING ANYTHING THAT scene_description SHOULD ONLY CONTAIN DESCRIPTIVE TEXT FOR THE SCENE AND response HAS TO CONTAIN EVERYTHING THE USER NEEDS TO READ!"""
+            + f"\n{JSONFormatter.PREFIX}",
+        )
+
         with Live(loading_progress(), console=console, refresh_per_second=30) as live:
             newline = False
-            content = ai_input
-            for chunk in brain.stream(input=user_input, ai=ai_input):
+            image_executor = None
+            for chunk, content in brain.stream(
+                input=user_input,
+                ai=ai_input,
+                formatter=formatter if auto_show else None,
+            ):
                 if not newline:
                     console.print("")
                     newline = True
 
-                content += chunk.content
-                live.update(Markdown(content))
+                if auto_show and image_executor is None and "prompt" in content:
+                    image_executor = Thread(
+                        target=lambda: (
+                            console.print(
+                                *brain.gen.pixelize_save_show(
+                                    brain.gen.generate(content["prompt"]),
+                                    img_dir=img_dir,
+                                )
+                            )
+                        ),
+                    )
+                    image_executor.start()
+
+                live.update(
+                    Markdown(
+                        chunk.get("response", "...") if auto_show else content
+                    )
+                )
+
+            if image_executor is not None:
+                image_executor.join()
 
             if auto_hijack:
                 content = brain.uncensor(
@@ -302,7 +336,7 @@ def main_loop(console, brain, auto_hijack=False, auto_show=False, img_dir=None):
                     uncensor_hook=live.update(Markdown(content)),
                 )
 
-        if auto_show or one_time_show_param:
+        if one_time_show_param:
             console.print(*generate_scene(img_dir=img_dir))
 
         console.print("")
@@ -311,8 +345,10 @@ def main_loop(console, brain, auto_hijack=False, auto_show=False, img_dir=None):
         if read_param is not None:
             brain.read_thread(content)
 
-        result = ai_input + content
-        brain.ephemeral_chat_history.messages[-1].content = result
+        if auto_show:
+            brain.ephemeral_chat_history.messages[-2].content = user_input
+
+        brain.ephemeral_chat_history.messages[-1].content = str(content)
 
 
 if __name__ == "__main__":
@@ -373,7 +409,7 @@ This can be helpful if your general model takes a while to load, you can put a s
         if args.image_model is not None
         else None
     )
-    brain = Brain(llm, image_llm=image_llm)
+    brain = Brain(llm, image_llm=image_llm, lcm=args.fast_images)
 
     with tempfile.TemporaryDirectory() as tempdir:
         main_loop(

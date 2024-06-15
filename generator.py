@@ -175,5 +175,3 @@ if __name__ == "__main__":
     )
     img.show()
     console.print(gen.pixelize(img))
-
-    pass
