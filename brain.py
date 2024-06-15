@@ -12,6 +12,7 @@ import io
 from threading import Thread
 import re
 from generator import Generator
+from collections.abc import Generator as GenType
 
 
 class JSONFormatter:
@@ -138,7 +139,7 @@ class Brain:
         session_id: str = "unused",
         target: str = "chain",
         formatter: JSONFormatter | None = None,
-    ):
+    ) -> str | dict[str, any]:
         target = self._target(target)
         input, ai = Brain._handle_input(input, ai, formatter)
 
@@ -161,8 +162,7 @@ class Brain:
         session_id: str = "unused",
         target: str = "chain",
         formatter: JSONFormatter | None = None,
-        only_done: bool = False,
-    ):
+    ) -> GenType[str | dict[str, any], None, None]:
         target = self._target(target)
         input, ai = Brain._handle_input(input, ai, formatter)
 
@@ -177,15 +177,11 @@ class Brain:
             if i == 0:
                 chunk = ai + chunk
             content += chunk
-            yield chunk, (
-                content
-                if formatter is None
-                else (
-                    formatter.parse_done(content)
-                    if only_done
-                    else formatter.parse(content)
-                )
-            )
+
+            if formatter is None:
+                yield chunk, content
+            else:
+                yield formatter.parse(content), formatter.parse_done(content)
 
     def clear_last_messages(self, n, keep=None):
         messages = self.ephemeral_chat_history.messages
@@ -346,7 +342,7 @@ if __name__ == "__main__":
         "formatter": formatter,
     }
 
-    print(brain.invoke(**params))
+    # print(brain.invoke(**params))
 
-    for chunk, content in brain.stream(**params, only_done=True):
-        print(content)
+    for chunk, content in brain.stream(**params):
+        print(chunk)
