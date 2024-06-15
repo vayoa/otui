@@ -1,7 +1,7 @@
 import argparse
 import tempfile
 from threading import Thread
-from rich.console import Console
+from rich.console import Console, Group
 from rich.markdown import Markdown
 from rich.progress import (
     Progress,
@@ -13,6 +13,7 @@ from rich.progress import (
 from rich.live import Live
 from rich.columns import Columns
 from rich.panel import Panel
+from rich.rule import Rule
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.key_binding import KeyBindings
@@ -296,6 +297,7 @@ NOTICE HOW THE USER WOULD ONLY SEE the response ON HIS SCREEN! MEANING ANYTHING 
         with Live(loading_progress(), console=console, refresh_per_second=30) as live:
             newline = False
             image_executor = None
+            image_content = []
             for chunk, content in brain.stream(
                 input=user_input,
                 ai=ai_input,
@@ -305,11 +307,25 @@ NOTICE HOW THE USER WOULD ONLY SEE the response ON HIS SCREEN! MEANING ANYTHING 
                     console.print("")
                     newline = True
 
+                if auto_show:
+                    update = Markdown(chunk.get("response", "..."))
+                    if "prompt" in chunk:
+                        update = Group(
+                            Markdown("> " + chunk["prompt"].replace("\n", "> ")),
+                            loading_progress(
+                                description="Generating Image", style="yellow"
+                            ),
+                            update,
+                        )
+                else:
+                    update = Markdown(content)
+                live.update(update)
+
                 if auto_show and image_executor is None and "prompt" in content:
                     image_executor = Thread(
                         target=lambda: (
-                            console.print(
-                                *brain.gen.pixelize_save_show(
+                            image_content.append(
+                                brain.gen.pixelize_save_show(
                                     brain.gen.generate(content["prompt"]),
                                     img_dir=img_dir,
                                 )
@@ -318,14 +334,16 @@ NOTICE HOW THE USER WOULD ONLY SEE the response ON HIS SCREEN! MEANING ANYTHING 
                     )
                     image_executor.start()
 
-                live.update(
-                    Markdown(
-                        chunk.get("response", "...") if auto_show else content
-                    )
-                )
-
             if image_executor is not None:
                 image_executor.join()
+                live.update(
+                    Group(
+                        *image_content[-1],
+                        Rule(style="yellow"),
+                        Markdown(content["response"]),
+                    )
+                )
+                image_content.clear()
 
             if auto_hijack:
                 content = brain.uncensor(

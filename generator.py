@@ -160,7 +160,9 @@ class Generator:
         img_name = img_name.replace(" ", "+")
         img_dir = img_dir + f"\\{img_name}.png"
         img.save(img_dir)
-        return f"[yellow link={img_dir}]show[/]", self.pixelize(img, ratio=ratio)
+        return f"[yellow link={img_dir}]show ({img_name})[/]", self.pixelize(
+            img, ratio=ratio
+        )
 
 
 if __name__ == "__main__":
