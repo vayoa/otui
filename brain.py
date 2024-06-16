@@ -34,7 +34,13 @@ class JSONFormatter:
 
     def parse(self, output):
         try:
-            return loads(output)
+            json = loads(output)
+            if isinstance(json, list):
+                r = {}
+                for d in json:
+                    r.update(d)
+                json = r
+            return json
         except:
             return {key: output for key in self.schema}
 

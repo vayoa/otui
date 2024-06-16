@@ -15,6 +15,7 @@ from rich_pixels import Pixels
 import os
 import signal
 import subprocess
+import asyncio
 
 
 class Generator:
