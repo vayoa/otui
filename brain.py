@@ -36,6 +36,7 @@ class JSONFormatter:
         try:
             json = loads(output)
             if isinstance(json, list):
+                print(f"ERROR - GOTTEN LIST:\n{output}")
                 r = {}
                 for d in json:
                     r.update(d)
@@ -63,6 +64,16 @@ class JSONFormatter:
 
 
 class Brain:
+
+    RP_FORMATTER = JSONFormatter(
+        prefix="""Split your response into 2 highly detailed parts:
+1. prompt - a scene description in the form of a stable diffusion prompt only describing how the scene looks and the characters in it.
+2. response which is your actual text response the user sees of what happens.
+NOTICE HOW THE USER WOULD ONLY SEE the response ON HIS SCREEN! MEANING ANYTHING THAT scene_description SHOULD ONLY CONTAIN DESCRIPTIVE TEXT FOR THE SCENE AND response HAS TO CONTAIN EVERYTHING THE USER NEEDS TO READ!"""
+        + f"\n{JSONFormatter.PREFIX}",
+        response="Your detailed text response to my message",
+        prompt="A comma separated Stable Diffusion / DALL-E prompt, highly detailed and long describing the scene of your response.",
+    )
 
     @staticmethod
     def get_chain(llm, ephemeral_chat_history=ChatMessageHistory()):

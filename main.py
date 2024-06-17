@@ -284,16 +284,6 @@ def main_loop(console, brain, auto_hijack=False, auto_show=False, img_dir=None):
             ai_input = hijack if hijack else "Sure, "
             user_input = user_input.replace("/hijack", "").lstrip()
 
-        formatter = JSONFormatter(
-            response="Your detailed roleplay game response to my message",
-            prompt="A comma separated Stable Diffusion / DALL-E prompt, highly detailed and long describing the scene of your response.",
-            prefix="""Split your response into 2 highly detailed parts:
-1. prompt - a scene description in the form of a stable diffusion prompt only describing how the scene looks
-2. response which is your actual text response the user sees of what happens in the game
-NOTICE HOW THE USER WOULD ONLY SEE the response ON HIS SCREEN! MEANING ANYTHING THAT scene_description SHOULD ONLY CONTAIN DESCRIPTIVE TEXT FOR THE SCENE AND response HAS TO CONTAIN EVERYTHING THE USER NEEDS TO READ!"""
-            + f"\n{JSONFormatter.PREFIX}",
-        )
-
         with Live(loading_progress(), console=console, refresh_per_second=30) as live:
             newline = False
             image_executor = None
@@ -301,7 +291,7 @@ NOTICE HOW THE USER WOULD ONLY SEE the response ON HIS SCREEN! MEANING ANYTHING 
             for chunk, content in brain.stream(
                 input=user_input,
                 ai=ai_input,
-                formatter=formatter if auto_show else None,
+                formatter=Brain.RP_FORMATTER if auto_show else None,
             ):
                 if not newline:
                     console.print("")
