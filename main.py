@@ -341,7 +341,7 @@ def main_loop(console, brain, auto_hijack=False, auto_show=False, img_dir=None):
                     pre_uncensor_hook=lambda: live.update(
                         loading_progress(style="red", description="UNCENSORING")
                     ),
-                    uncensor_hook=live.update(Markdown(content)),
+                    uncensor_hook=lambda: live.update(Markdown(content)),
                 )
 
         if one_time_show_param:
