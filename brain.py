@@ -233,7 +233,7 @@ NOTICE HOW THE USER WOULD ONLY SEE the response ON HIS SCREEN! MEANING ANYTHING 
                 ai=ai_prefix,
                 **kwargs,
             ):
-                content = content[len(ai_prefix):]
+                content = content[len(ai_prefix) :]
                 uncensor_hook(content)
 
             self.clear_last_messages(3, keep=1)
@@ -361,7 +361,7 @@ if __name__ == "__main__":
     from langchain_community.chat_models import ChatOllama
     from rich import print
 
-    llm = ChatOllama(model="llama3", system="", template="")
+    llm = ChatOllama(model="llama3.1", system="", template="")
     brain = Brain(llm)
     formatter = JSONFormatter(
         diffusion_prompt="A comma separated Stable Diffusion / DALL-E prompt, highly detailed and long describing the scene of your response.",

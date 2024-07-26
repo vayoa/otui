@@ -394,7 +394,7 @@ if __name__ == "__main__":
         "--model",
         "--m",
         action="store",
-        default="llama3",
+        default="llama3.1",
         help="The model to use for OTUI. Defaults to llama3.",
     )
 
