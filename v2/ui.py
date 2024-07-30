@@ -166,7 +166,6 @@ class UI:
     ) -> Generator[tuple[str, str], None, None]:
         yield from self.stream(input=input, ai=ai)
         if hijack:
-            self.print(self.get_messages()[-1]["content"])
             yield from self.uncensor(
                 response=self.get_messages()[-1]["content"], live=live
             )
