@@ -23,7 +23,7 @@ from brain import Brain, JSONFormatter
 
 class CommandCompleter(Completer):
 
-    def __init__(self, characters):
+    def __init__(self, characters, commands=None):
         characters = {
             name: (
                 character["prompt"][:20] + "..."
@@ -33,20 +33,24 @@ class CommandCompleter(Completer):
             for name, character in characters.items()
         }
 
-        self.commands = {
+        self.commands = commands or {
             "bye | quit | exit": "quit",
             "hijack": "hijack",
             "auto-hijack | ah": "toggle auto-hijack mode",
             "show | s": "generates a picture",
             "auto-show | as": "toggle auto-show mode (generates a picture for every response)",
             "messages | m": "shows the current message history",
+        }
+
+        self.commands = {
+            **self.commands,
             "characters | chars": {
                 "meta": "shows all seen characters or describes a specific one",
                 "commands": characters,
             },
         }
 
-        self.characters = ["hey", "hello honey"]
+        self.characters = characters
 
     def complete(self, text, commands, prefix=""):
         if prefix:

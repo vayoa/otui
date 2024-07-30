@@ -1,34 +1,128 @@
 from dataclasses import dataclass, field
-from typing import Literal, Sequence, Optional, Union, Mapping, Iterator, Any, overload
+from typing import (
+    Literal,
+    Sequence,
+    Optional,
+    TypedDict,
+    Union,
+    Mapping,
+    Iterator,
+    Any,
+    overload,
+    Callable,
+    get_type_hints,
+    get_origin,
+)
+import inspect
 import ollama
 import ollama._types as ot
+from rich import print
+
+tool_type_mapper: Mapping[type, str] = {
+    str: "string",
+    int: "number",
+    float: "number",
+    bool: "boolean",
+    list: "array",
+    Sequence: "array",
+    dict: "object",
+    Mapping: "object",
+    type(None): "null",
+}
 
 
-def tool(
-    name: str,
-    description: str,
-    properties: Mapping[str, ot.Property],
-    required: Sequence[str],
-):
-    return {
-        "type": "function",
-        "function": {
-            "name": name,
-            "description": description,
-            "parameters": {
-                "type": "object",
-                "properties": properties,
-                "required": required,
-            },
-        },
-    }
+class ToolFunction(TypedDict):
+    func: Callable
+    description: str
+    parameter_descriptions: Sequence[str]
 
 
 @dataclass
 class Brain:
     model: str = "llama3.1"
-    messages: Sequence[ot.Message] = field(default_factory=lambda: [])
-    tools: Optional[Sequence[ot.Tool]] = None
+    messages: list[ot.Message] = field(default_factory=list)
+    tools: list[ot.Tool] = field(default_factory=list)
+    options: Optional[ot.Options] = None
+    functions: Optional[Sequence[ToolFunction]] = None
+
+    def __post_init__(self):
+        if self.functions is not None:
+            for tool_func in self.functions:
+                self.register_function(tool_func)
+
+    @staticmethod
+    def tool(
+        name: str,
+        description: str,
+        properties: Mapping[str, ot.Property],
+        required: Sequence[str],
+    ) -> ot.Tool:
+        return {
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": description,
+                "parameters": {
+                    "type": "object",
+                    "properties": properties,
+                    "required": required,
+                },
+            },
+        }
+
+    @staticmethod
+    def toolify(
+        func: Callable,
+        description: str,
+        parameter_descriptions: Sequence[str],
+    ) -> ot.Tool:
+
+        signature = inspect.signature(func)
+        type_hints = get_type_hints(func)
+
+        description = description.strip()
+        parameter_descriptions = [desc.strip() for desc in parameter_descriptions]
+
+        assert len(signature.parameters) == len(parameter_descriptions)
+        # assert descriptions are not empty...
+        assert description
+        assert all(desc for desc in parameter_descriptions)
+
+        properties: Mapping[str, ot.Property] = {}
+        required: list[str] = []
+
+        for (name, param), desc in zip(
+            signature.parameters.items(), parameter_descriptions
+        ):
+            param_type = type_hints.get(name, str)
+
+            # if the parameter is required
+            if param.default is inspect.Parameter.empty and param_type is not Optional:
+                required.append(name)
+
+            param_type = tool_type_mapper.get(
+                param_type, tool_type_mapper.get(get_origin(param_type), "string")
+            )
+            properties[name] = ot.Property(type=param_type, description=desc)
+            if get_origin(param.annotation) is Literal:
+                properties[name]["enum"] = list(param.annotation.__args__)
+
+        return Brain.tool(
+            name=func.__name__,
+            description=description,
+            properties=properties,
+            required=required,
+        )
+
+    def register_function(self, tool_func: ToolFunction):
+        self.tools.append(Brain.toolify(**tool_func))
+
+    def clear_last_messages(self, n, keep=None):
+        messages = self.messages
+        kept_messages = [messages[-keep]] if keep is not None else []
+        messages = messages[:-n] + kept_messages
+
+        self.messages = messages
 
     @overload
     def chat(
@@ -61,7 +155,7 @@ class Brain:
         input: str | Sequence[ot.Message] = [],
         model: str = model,
         messages: Optional[Sequence[ot.Message]] = None,
-        tools: Optional[Sequence[ot.Tool]] = tools,
+        tools: Optional[Sequence[ot.Tool]] = None,
         stream: bool = False,
         format: Literal["", "json"] = "",
         options: Optional[ot.Options] = None,
@@ -74,13 +168,14 @@ class Brain:
 
         model = model or self.model
         messages = messages or self.messages
-        tools = tools or self.tools
+        tools = tools or (None if not self.tools else self.tools)
+        options = options or self.options
 
         return ollama.chat(
             model=model,
             messages=messages,
             tools=tools,
-            stream=stream,
+            stream=stream,  # type: ignore
             format=format,
             options=options,
             keep_alive=keep_alive,
@@ -88,23 +183,8 @@ class Brain:
 
 
 if __name__ == "__main__":
-    tools = [
-        tool(
-            name="get_current_weather",
-            description="Get the current weather for a city",
-            required=["city"],
-            properties={
-                "city": {
-                    "type": "string",
-                    "description": "The name of the city",
-                },
-            },
-        )
-    ]
 
-    brain = Brain(tools=tools)
+    def test(a: dict[int, int], b: list[str] = ["a"]):
+        return None
 
-    # print(brain.chat("What is the weather in Toronto?"))
-
-    for i in brain.chat("What is the weather in Toronto?", stream=True):
-        print(i)
+    print(Brain.toolify(test, "test function", ["a", "b"]))
