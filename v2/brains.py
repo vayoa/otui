@@ -183,8 +183,57 @@ class Brain:
 
 
 if __name__ == "__main__":
+    from eyes import Eyes
 
-    def test(a: dict[int, int], b: list[str] = ["a"]):
-        return None
+    eyes = Eyes()
 
-    print(Brain.toolify(test, "test function", ["a", "b"]))
+    def generate_character(name: str, prompt: str):
+        print(name)
+        img = eyes.generate(positive=prompt, lcm=True)
+        if img is not None:
+            img.show()
+
+    brain = Brain(
+        functions=[
+            ToolFunction(
+                func=generate_character,
+                description="Use if you introduced a new character to the story.",
+                parameter_descriptions=[
+                    "The name of the new character",
+                    """
+A comma separated Stable Diffusion / DALL-E prompt, detailed and medium length describing how the character looks.
+Pay attention to age, ethnicity, country of origin, eye and hair color, skin color, clothes, emotion etc...""",
+                ],
+            )
+        ]
+    )
+
+    content = ""
+    for chunk in brain.chat(
+        [
+            {
+                "role": "user",
+                "content": "Lets roleplay, start me off in front of the ice king, Steffen!",
+            },
+            {
+                "role": "assistant",
+                "content": '{"name": "',
+            },
+        ],
+        stream=True,
+    ):
+        content += chunk["message"]["content"]
+        print(chunk["message"]["content"], end="")
+
+    print()
+
+    import json
+
+    print(json.loads(content))
+
+    for chunk in brain.chat(input=[{"role": "assistant", "content": " "}], stream=True):
+        print(chunk["message"]["content"], end="")
+
+    print()
+
+    eyes.close()

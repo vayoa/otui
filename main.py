@@ -320,10 +320,15 @@ def main_loop(console, brain, auto_hijack=False, auto_show=False, img_dir=None):
                         target=lambda: (
                             image_content.append(
                                 brain.gen.pixelize_save_show(
-                                    brain.gen.generate(content["prompt"]),
+                                    brain.gen.generate_with_character(
+                                        content["prompt"],
+                                        brain.get_character_prompt(
+                                            content["main_character"]
+                                        ),
+                                    ),
                                     img_dir=img_dir,
                                 )
-                            )
+                            ),
                         ),
                     )
                     image_executor.start()

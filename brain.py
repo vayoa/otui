@@ -72,6 +72,7 @@ class Brain:
 NOTICE HOW THE USER WOULD ONLY SEE the response ON HIS SCREEN! MEANING ANYTHING THAT scene_description SHOULD ONLY CONTAIN DESCRIPTIVE TEXT FOR THE SCENE AND response HAS TO CONTAIN EVERYTHING THE USER NEEDS TO READ!"""
         + f"\n{JSONFormatter.PREFIX}",
         response="Your detailed text response to my message",
+        main_character="The name of the main character (not the player) the scene revolves around / showcases.",
         prompt="A comma separated Stable Diffusion / DALL-E prompt, highly detailed and long describing the scene of your response.",
     )
 
@@ -240,6 +241,34 @@ NOTICE HOW THE USER WOULD ONLY SEE the response ON HIS SCREEN! MEANING ANYTHING 
             self.ephemeral_chat_history.messages[-1].content = content
             return self.uncensor(content)
         return response
+
+    def get_character_prompt(self, name):
+        name = name.strip().split(" ")[0]
+        character_img = self.gen.characters.get(name, {}).get("img")
+        character_prompt = None
+        if name and name not in self.gen.characters:
+            char_formatter = JSONFormatter(prompt="The prompt")
+
+            character_prompt = self.invoke(
+                input=f"""Give me a comma separated Stable Diffusion / DALL-E prompt, detailed and medium length describing how the character {name} looks.
+Pay attention to age, ethnicity, country of origin, eye and hair color, skin color, clothes, emotion etc...
+{char_formatter.instruct()}
+        """,
+                ai=f"""So sorry, of course, here's a detailed, medium-length image-generation prompt describing {name} with your instructions to specifically describe some of her features:
+{char_formatter.response_suffix()}""",
+            ).strip()
+
+            self.clear_last_messages(2)
+
+            character_prompt = char_formatter.parse(character_prompt)["prompt"]
+
+            character_img = self.gen.generate(
+                f"A portrait of {name}, " + character_prompt,
+                dimensions=self.gen.default_dimensions[::-1],
+            )
+            self.gen.add_character(name, character_img, character_prompt)
+
+        return character_img
 
     def generate_scene(
         self,

@@ -56,6 +56,11 @@ class Generator:
         if self.connected:
             self.ws.close()
 
+    def create_character(self, name, prompt):
+        img = self.generate(positive=f"A portrait of {name}.\n{prompt}")
+        self.add_character(name, img, prompt)
+        return img
+
     def add_character(self, name, img, prompt):
         self.characters[name] = {"img": img, "prompt": prompt}
 

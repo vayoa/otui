@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import re
 from typing import Generator, Sequence
 from brains import Brain, ToolFunction, ot
+from eyes import Eyes
 from ui import UI
 from rich import print
 from rich.live import Live
@@ -11,6 +12,7 @@ from rich.live import Live
 @dataclass(kw_only=True)
 class BrainUI(UI):
     brain: Brain
+    eyes: Eyes
 
     def get_messages(self) -> list[ot.Message]:
         return self.brain.messages
@@ -78,8 +80,13 @@ def args(**kwargs):
     return parser.parse_args()
 
 
+def add_character():
+    ...
+
+
 if __name__ == "__main__":
     args = args()  # type: ignore
-    brain = Brain(model=args.model)
-    ui = BrainUI(brain=brain)
+    eyes = Eyes()
+    brain = Brain(model=args.model, functions=[ToolFunction(func: )])
+    ui = BrainUI(brain=brain, eyes=eyes)
     ui.run(args)

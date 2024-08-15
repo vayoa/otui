@@ -40,18 +40,5 @@ if __name__ == "__main__":
     engine = CoquiEngine()
     stream = TextToAudioStream(engine)
 
-    # stream.feed("Hello world, How are you today?")
-    # stream.play_async()
-
-    def write(prompt: str):
-        for chunk in openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            stream=True,
-        ):
-            if (text_chunk := chunk["choices"][0]["delta"].get("content")) is not None:
-                yield text_chunk
-
-    text_stream = write("A three-sentence relaxing speech.")
-
-    stream.feed(text_stream)
+    stream.feed("Hello world, How are you today?")
+    stream.play_async()
