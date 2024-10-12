@@ -55,13 +55,18 @@ class Eyes:
         character_image=None,
         dimensions=None,
         lcm=None,
+        checkpoint=None,
+        steps=None,
+        sampler_name=None,
+        cfg=None,
     ):
 
         lcm = lcm if lcm is not None else self.lcm
         negative = negative or self.default_negative_prompt
         dimensions = dimensions or self.default_dimensions
+        checkpoint = checkpoint or self.default_checkpoint
 
-        cl = CheckpointLoaderSimple()
+        cl = CheckpointLoaderSimple(ckpt_name=checkpoint)
         l = EmptyLatentImage(width=dimensions[0], height=dimensions[1])
         pos = CLIPTextEncode(
             clip=cl.outputs["CLIP"],
@@ -74,6 +79,9 @@ class Eyes:
             negative=neg.outputs["CONDITIONING"],
             latent_image=l.outputs["LATENT"],
             seed=random.randint(0, 10**10),
+            steps=steps or 20,
+            sampler_name=sampler_name or "dpmpp_sde",
+            cfg=cfg or 8,
         )
         vaed = VAEDecode(samples=ks.outputs["LATENT"], vae=cl.outputs["VAE"])
 
@@ -148,6 +156,10 @@ class Eyes:
         dimensions=None,
         character_image=None,
         lcm=None,
+        checkpoint=None,
+        steps=None,
+        sampler_name=None,
+        cfg=None,
     ) -> Image | None:
         return self.get_image(
             self.get_workflow(
@@ -156,6 +168,10 @@ class Eyes:
                 dimensions=dimensions,
                 character_image=character_image,
                 lcm=lcm,
+                checkpoint=checkpoint,
+                steps=steps,
+                sampler_name=sampler_name,
+                cfg=cfg,
             )
         )
 
@@ -165,7 +181,7 @@ class Eyes:
 
         return Pixels.from_image(
             img,
-            resize=(img.width // ratio, img.height // ratio),
+            resize=(int(img.width * ratio), int(img.height * ratio)),
         )
 
     def pixelize_save_show(self, img, img_dir, img_name=str(uuid.uuid4()), ratio=None):
@@ -182,10 +198,12 @@ if __name__ == "__main__":
 
     console = Console()
 
-    gen = Eyes(lcm=True)
+    gen = Eyes(lcm=False, default_checkpoint="waiANINSFWPONYXL_v70.safetensors")
 
     img = gen.generate(
         "A portrait of Netta, a brunette Israeli 20 year old woman with green eyes.",
+        steps=30,
+        sampler_name="dpmpp_2m_sde_gpu",
     )
     if img is not None:
         img.show()

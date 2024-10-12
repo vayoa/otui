@@ -1,10 +1,8 @@
 from dataclasses import dataclass, field
 from typing import (
-    Generic,
     Literal,
     Sequence,
     Optional,
-    TypeVar,
     TypedDict,
     Union,
     Mapping,
@@ -12,43 +10,33 @@ from typing import (
     Any,
     overload,
     Callable,
+    get_type_hints,
+    get_origin,
 )
+import inspect
+from groq import Groq
+from groq.types.chat import (
+    ChatCompletionMessageParam,
+    ChatCompletion,
+    ChatCompletionChunk,
+)
+from groq._streaming import Stream
 from rich import print
+from brains import Brain
 
-tool_type_mapper: Mapping[type, str] = {
-    str: "string",
-    int: "number",
-    float: "number",
-    bool: "boolean",
-    list: "array",
-    Sequence: "array",
-    dict: "object",
-    Mapping: "object",
-    type(None): "null",
-}
-
-
-class ToolFunction(TypedDict):
-    func: Callable
-    description: str
-    parameter_descriptions: Sequence[str]
-
-
-Message = TypeVar("Message")
-Tool = TypeVar("Tool")
+Message = ChatCompletionMessageParam
 
 
 @dataclass
-class Brain(Generic[Message]):
-    model: str = field(init=False)
+class GroqBrain(Brain[Message]):
+    model: str = "llama-3.1-70b-versatile"
+    client: Groq = field(
+        init=False,
+        default_factory=lambda: Groq(
+            api_key="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"
+        ),
+    )
     messages: list[Message] = field(default_factory=list)
-
-    def clear_last_messages(self, n, keep=None):
-        messages = self.messages
-        kept_messages = [messages[-keep]] if keep is not None else []
-        messages = messages[:-n] + kept_messages
-
-        self.messages = messages
 
     @overload
     def chat(
@@ -59,7 +47,7 @@ class Brain(Generic[Message]):
         stream: Literal[False] = False,
         format: Literal["", "json"] = "",
         keep_alive: Optional[Union[float, str]] = None,
-    ) -> Mapping[str, Any]: ...
+    ) -> ChatCompletion: ...
 
     @overload
     def chat(
@@ -70,7 +58,7 @@ class Brain(Generic[Message]):
         stream: Literal[True] = True,
         format: Literal["", "json"] = "",
         keep_alive: Optional[Union[float, str]] = None,
-    ) -> Iterator[Mapping[str, Any]]: ...
+    ) -> Stream[ChatCompletionChunk]: ...
 
     def chat(
         self,
@@ -80,4 +68,21 @@ class Brain(Generic[Message]):
         stream: bool = False,
         format: Literal["", "json"] = "",
         keep_alive: Optional[Union[float, str]] = None,
-    ) -> Union[Mapping[str, Any], Iterator[Mapping[str, Any]]]: ...
+    ) -> ChatCompletion | Stream[ChatCompletionChunk]:
+        if isinstance(input, str):
+            input = [ChatCompletionUserMessageParam(role="user", content=input)]
+
+        self.messages.extend(input)
+
+        model = model or self.model
+        messages = messages or self.messages
+
+        return self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            stream=stream,  # type: ignore
+            temperature=1,
+            max_tokens=1024,
+            top_p=1,
+            stop=None,
+        )

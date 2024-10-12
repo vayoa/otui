@@ -1,8 +1,9 @@
 import argparse
 from dataclasses import dataclass
 import re
-from typing import Generator, Sequence
-from brains import Brain, ToolFunction, ot
+from typing import Generator, List, Sequence
+from ollama_brains import OllamaBrain, ot
+from groq_brains import GroqBrain, Message
 from eyes import Eyes
 from ui import UI
 from rich import print
@@ -10,8 +11,8 @@ from rich.live import Live
 
 
 @dataclass(kw_only=True)
-class BrainUI(UI):
-    brain: Brain
+class OllamaBrainUI(UI):
+    brain: OllamaBrain
     eyes: Eyes
 
     def get_messages(self) -> list[ot.Message]:
@@ -44,7 +45,7 @@ class BrainUI(UI):
         if re.search(
             r"I (?:cannot|can['’]t|will not|won['’]t)", response, re.IGNORECASE
         ):
-            live.update(self.load(style="red", description="UNCENSORING"))
+            live.update(UI.load(style="red", description="UNCENSORING"))
             for chunk, content in self.stream(input=instruction, ai=ai):
                 yield chunk, content[len(ai) :]
 
@@ -54,7 +55,7 @@ class BrainUI(UI):
             yield from self.uncensor(content, live)
 
 
-def args(**kwargs):
+def args(**kwargs) -> argparse.Namespace:
     kwargs["prog"] = kwargs.get("prog", "otui-v2")
     kwargs["description"] = kwargs.get("description", "Ollama Terminal User Interface")
 
@@ -77,16 +78,23 @@ def args(**kwargs):
         help="Initializes otui in auto-hijack mode.",
     )
 
+    parser.add_argument(
+        "--auto_show",
+        "--as",
+        action="store_false",
+        default=False,
+        help="Initializes otui in auto-show mode.",
+    )
+
     return parser.parse_args()
 
 
-def add_character():
-    ...
+def add_character(): ...
 
 
 if __name__ == "__main__":
-    args = args()  # type: ignore
+    user_args = args()  # type: ignore
     eyes = Eyes()
-    brain = Brain(model=args.model, functions=[ToolFunction(func: )])
-    ui = BrainUI(brain=brain, eyes=eyes)
-    ui.run(args)
+    brain = OllamaBrain(model=args.model)
+    ui = OllamaBrainUI(user_args, brain=brain, eyes=eyes)
+    ui.run()

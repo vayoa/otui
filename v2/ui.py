@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
-import re
-import tempfile
+from argparse import Namespace
 from threading import Thread
 from typing import Any, Callable, Generator, Mapping, Optional, Sequence, TypedDict
 from rich.console import Console, Group
@@ -20,7 +19,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.key_binding import KeyBindings
 from langchain_community.chat_models import ChatOllama
-import brains
+import ollama_brains as ollama_brains
 
 
 class Prompter:
@@ -41,7 +40,7 @@ class Prompter:
                 "bye | quit | exit": "quit",
                 "hijack": "hijack",
                 "auto-hijack | ah": "toggle auto-hijack mode",
-                "show | s": "generates a picture",
+                # "show | s": "generates a picture",
                 "auto-show | as": "toggle auto-show mode (generates a picture for every response)",
                 "messages | m": "shows the current message history",
             }
@@ -144,6 +143,7 @@ class Prompter:
 
 @dataclass
 class UI:
+    args: Namespace
     prompter: Prompter = field(default_factory=lambda: Prompter())
     console: Console = field(default_factory=lambda: Console())
 
@@ -173,7 +173,8 @@ class UI:
     def print(self, text):
         self.console.print(text)
 
-    def load(self, disable=True, style="white", description=""):
+    @staticmethod
+    def load(disable=True, style="white", description=""):
         bar = BarColumn(bar_width=None, pulse_style=style)
         progress = Progress(
             bar,
@@ -194,8 +195,11 @@ class UI:
         progress.start()
         return progress
 
-    def run(self, args):
-        auto_hijack = args.auto_hijack
+    def display(self, live: Live, content: str, end: bool = False):
+        live.update(Markdown(content))
+
+    def run(self, first_ai_input=None):
+        auto_hijack = self.args.auto_hijack
 
         user_input = ""
 
@@ -225,6 +229,14 @@ class UI:
                 )
                 continue
 
+            auto_show_param = params.get("auto-show", params.get("as"))
+            if auto_show_param is not None:
+                self.args.auto_show = not self.args.auto_show
+                self.print(
+                    f"[orange]Auto-Show[/] {'[bold green]ON[/]' if self.args.auto_show else '[bold red]OFF[/]'}"
+                )
+                continue
+
             show_messages_param = params.get("messages", params.get("m"))
             if show_messages_param is not None:
                 self.print(self.get_messages())
@@ -235,15 +247,23 @@ class UI:
                 ai_input = hijack if hijack else "Sure, "
                 user_input = user_input.replace("/hijack", "").lstrip()
 
-            with Live(self.load(), console=self.console, refresh_per_second=30) as live:
+            if first_ai_input is not None:
+                ai_input = first_ai_input
+                first_ai_input = None
+
+            with Live(UI.load(), console=self.console, refresh_per_second=30) as live:
                 newline = False
 
                 for chunk, content in self.respond(
-                    input=user_input, ai=ai_input, hijack=auto_hijack, live=live
+                    input=user_input,
+                    ai=ai_input,
+                    hijack=auto_hijack,
+                    live=live,
                 ):
                     if not newline:
                         self.print("")
                         newline = True
 
-                    update = Markdown(content)
-                    live.update(update)
+                    self.display(live, content)
+
+                self.display(live, content, end=True)
