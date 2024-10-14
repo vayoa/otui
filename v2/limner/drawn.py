@@ -3,7 +3,14 @@ import numpy as np
 import base64
 import cv2
 from PIL import Image
-from . import scripter as s, panel_generator as pg, image_generator as ig
+from . import (
+    scripter as s,
+    panel_generator as pg,
+    image_generator as ig,
+    bubble_painter as bp,
+)
+
+bubble_painter = bp.BubblePainter()
 
 
 class DrawnPanel(s.Panel):
@@ -131,7 +138,9 @@ class DrawnPage(s.Page):
             "controlnet": self.controlnet,
         }
 
-    def get_images(self, settings, controlnet_payload=None, draw_only=None):
+    def get_images(
+        self, settings, controlnet_payload=None, draw_only=None, text=None
+    ) -> list[Image.Image]:
         images = []
         for i, panel in enumerate(self.panels):
             if draw_only is None or i == draw_only:
@@ -154,10 +163,24 @@ class DrawnPage(s.Page):
         all_dimensions = self.get_all_dimensions()
         bubbles = self.get_dialog()
 
+        images = (
+            self.get_images(settings, draw_only=panel) if not self.controlnet else None
+        )
+        print(bubbles)
+        if images is not None and bubbles and bubbles[0] is not None:
+            texts = [
+                "\n".join([bubble[0] for bubble in panel_bubbles])
+                for panel_bubbles in bubbles
+            ]
+            images = bubble_painter.inpaint_text_with_new_text(images, texts)
+            images = [
+                Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)) for img in images
+            ]
+
         canvas = pg.draw_rectangles(
-            self.get_images(settings, draw_only=panel) if not self.controlnet else None,
+            images,
             all_dimensions,
-            bubbles if not self.controlnet else None,
+            None,  # bubbles if not self.controlnet else None,
             settings,
             reverse=self.controlnet,
         )

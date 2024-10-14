@@ -1,7 +1,7 @@
 import base64
 from dataclasses import dataclass, field
 import io
-from typing import Dict, Tuple, Union, TypeVar
+from typing import Dict, Literal, Tuple, Union, TypeVar
 import json
 import itertools
 from PIL.Image import Image
@@ -198,6 +198,7 @@ class ETN_LoadImageBase64(Node):
 @dataclass
 class ETN_SendImageWebSocket(Node):
     images: Plug
+    format: Literal["PNG", "JPEG"] = "PNG"
 
     _title = "Send Image (WebSocket)"
 

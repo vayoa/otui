@@ -1,10 +1,12 @@
 import os
 import textwrap
+import PIL.Image
 import cv2
 import easyocr.recognition
 import numpy as np
 import easyocr
 from typing import List
+import PIL.Image
 
 
 class BubblePainter:
@@ -14,7 +16,7 @@ class BubblePainter:
         self.reader = easyocr.Reader(lang_list)
 
     # Function to group text regions that are close together
-    def group_text_boxes(self, boxes, touch_threshold=5):
+    def group_text_boxes(self, boxes, touch_threshold=10):
         """
         Groups text boxes based on the distance from the combined bounding box edges.
         """
@@ -221,7 +223,7 @@ class BubblePainter:
     # Main function that processes multiple images and replaces text in bubbles
     def inpaint_text_with_new_text(
         self,
-        img_paths: List[str],
+        img_paths: list[str] | list[PIL.Image.Image],
         texts: List[str],
         draw_bounds=False,
         edge_threshold=10,
@@ -229,7 +231,10 @@ class BubblePainter:
         processed_images = []
 
         for img_path, new_text in zip(img_paths, texts):
-            img = cv2.imread(img_path)
+            if isinstance(img_path, str):
+                img = cv2.imread(img_path)
+            else:
+                img = cv2.cvtColor(np.array(img_path), cv2.COLOR_RGB2BGR)
 
             # Use EasyOCR to read the text and get bounding boxes
             results = self.reader.readtext(img)
@@ -313,15 +318,18 @@ class BubblePainter:
 if __name__ == "__main__":
     bubble_painter = BubblePainter()
 
+    path = "./limner/images"
+
     filenames = [
-        "images/1-1.png",
-        "images/1-2.png",
-        "images/1-3.png",
-        "images/1-4.png",
-        "images/2-1.png",
-        "images/2-2.png",
-        "images/2-3.png",
-        "images/2-4.png",
+        f"{path}/1-1.png",
+        f"{path}/1-2.png",
+        f"{path}/1-3.png",
+        f"{path}/1-4.png",
+        f"{path}/2-1.png",
+        f"{path}/2-2.png",
+        f"{path}/2-3.png",
+        f"{path}/2-4.png",
+        f"{path}/2-5.png",
     ]
 
     # Process the images (inpaint and draw new text)
@@ -335,5 +343,5 @@ if __name__ == "__main__":
 
     # Display and save the results
     for img, filename in zip(processed_images, filenames):
-        result_path = f"./images/result-{os.path.basename(filename)}"
+        result_path = f"{path}/result-{os.path.basename(filename)}"
         cv2.imwrite(result_path, img)

@@ -2,14 +2,8 @@ import json
 import base64
 import requests
 from eyes import Eyes
-from limner import ui
 
-
-def submit_post(url: str, data: dict):
-    """
-    Submit a POST request to the given URL with the given data.
-    """
-    return requests.post(url, data=json.dumps(data))
+EYES = Eyes(default_checkpoint="waiANINSFWPONYXL_v70.safetensors")
 
 
 def generate(
@@ -23,7 +17,7 @@ def generate(
     height=512,
     controlnet_payload=None,
 ):
-    image = ui.EYES.generate(
+    return EYES.generate(
         positive=prompt,
         negative=negative_prompt,
         dimensions=(width, height),
@@ -31,4 +25,3 @@ def generate(
         steps=steps,
         cfg=cfg_scale,
     )
-    return image

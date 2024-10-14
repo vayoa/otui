@@ -44,7 +44,7 @@ def get_settings(json_data):
         json_data.get("panel_min_height_percent", 0.117),
     )
 
-    settings["image_zoom"] = eval(json_data.get("image_zoom", "1"))
+    settings["image_zoom"] = json_data.get("image_zoom", 1)
 
     settings["default_bubble"] = parse_bubble(json_data.get("default_bubble"))
 
@@ -70,8 +70,8 @@ def get_settings(json_data):
     return settings
 
 
-def generate(script, raw_settings, draw=True, location=None, last_script=None):
-    settings = get_settings(json.loads(raw_settings) if draw else raw_settings)
+def generate(script, settings, draw=True, location=None, last_script=None):
+    settings = get_settings(settings)
     script = s.script(script, settings["embeds"]["concepts"])
 
     loc_page, loc_panel = None, None
