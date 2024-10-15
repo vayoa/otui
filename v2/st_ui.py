@@ -1,11 +1,5 @@
 import streamlit as st
-from PIL import ImageColor
-from typing import Optional
-from pydantic import BaseModel, Field
-from pydantic.color import Color
-import streamlit_pydantic as sp
 from streamlit_ace import st_ace
-from streamlit_carousel import carousel
 from limner import main_runner as mr, drawn as d
 
 # from limner import main_runner as mr, drawn as d
@@ -29,45 +23,14 @@ DEFAULT_SCRIPT = """
 
 location: pov doorway
 
-[test] weaving her hands
+[rin] weaving her hands
 "Heyy"
 
 split: h
 
-[test] lifting an apple
+[rin] lifting an apple
 "yo wtf"
 """
-
-
-class Bubble(BaseModel):
-    bubble_color: Color
-    text_color: Color
-    font_size: Optional[int]
-    font: str = "C:\\Windows\\Fonts\\Arial.ttf"
-
-
-class Concepts(BaseModel):
-    concepts: dict[str, str] = Field(default={"spysuit": "black spy suit, tech"})
-
-
-class Character(BaseModel):
-    tags: str
-    # bubble: Bubble
-
-
-class Characters(BaseModel):
-    characters: dict[str, Character] = Field(
-        default={
-            "test": Character(
-                tags="guy, male, short black hair, white pants, white shirt",
-                # bubble=Bubble(
-                #     bubble_color=Color((200, 200, 200)),
-                #     text_color=Color("black"),
-                #     font_size=16,
-                # ),
-            )
-        }
-    )
 
 
 def generate(script, last_script, settings, chk, page, panel):
@@ -164,29 +127,68 @@ with st.sidebar:
         embeds = {}
 
         settings["prompt_prefix"] = st.text_input(
-            "Positive Prefix", value="score_9, score_8_up, score_7_up, speech bubbles"
+            "Positive Prefix",
+            value="score_9, score_8_up, score_7_up, speech bubbles",
         )
         settings["negative_prompt"] = st.text_input(
             "Negative Prefix", value="score_6, score_5, score_4"
         )
 
         with st.expander("Concepts"):
-            embeds = embeds | sp.pydantic_input(key="concepts-input", model=Concepts)
-        with st.expander("Characters"):
-            embeds = embeds | sp.pydantic_input(
-                key="characters-input", model=Characters
+            concepts = st.data_editor(
+                dict(Name=["Concept1"], Tags=[""]),
+                column_config={
+                    "Name": st.column_config.TextColumn(required=True, width="small"),
+                    "Tags": st.column_config.TextColumn(required=True, width="large"),
+                },
+                use_container_width=True,
+                num_rows="dynamic",
+                key="concepts-dataeditor",
             )
+            embeds["concepts"] = {
+                name: tags for name, tags in zip(concepts["Name"], concepts["Tags"])
+            }
+
+        with st.expander("Characters"):
+            characters = st.data_editor(
+                dict(Name=["rin"], Tags=["tohsaka rin"]),
+                column_config={
+                    "Name": st.column_config.TextColumn(required=True, width="small"),
+                    "Tags": st.column_config.TextColumn(required=True, width="large"),
+                },
+                use_container_width=True,
+                num_rows="dynamic",
+                key="characters-dataeditor",
+            )
+            embeds["characters"] = {
+                name: {"tags": tags}
+                for name, tags in zip(characters["Name"], characters["Tags"])
+            }
 
         settings["embeds"] = embeds
 
 left, right = st.columns(2)
 with left:
     with st.form("script"):
-        row = st.columns(4, vertical_alignment="bottom")
-        page = row[0].number_input("Page", min_value=1)
-        panel = row[1].number_input("Panel", min_value=1)
-        submitted = row[2].form_submit_button("Generate", use_container_width=True)
-        full_chk = row[3].checkbox("Full Page", value=True)
+        row = st.columns([0.2, 0.1, 0.2, 0.1, 0.4], vertical_alignment="center")
+        page = row[0].number_input(
+            "Page",
+            min_value=1,
+            label_visibility="collapsed",
+        )
+        row[1].write("Page")
+        panel = row[2].number_input(
+            "Panel",
+            min_value=0,
+            label_visibility="collapsed",
+        )
+        row[3].write("Panel")
+        full_chk = panel == 0
+        submitted = row[4].form_submit_button(
+            f"Generate {'Page' if full_chk else ''}",
+            type="primary",
+            use_container_width=True,
+        )
 
         script = st_ace(
             value=DEFAULT_SCRIPT,
@@ -215,14 +217,7 @@ with left:
 with right.container(border=True):
     images = st.session_state.get("images")
     if images:
-        page_selector = st.number_input(
-            "Page",
-            min_value=1,
-            max_value=len(images),
-            label_visibility="collapsed",
-            disabled=len(images) == 1,
-        )
-
+        page_selector = page if page <= len(images) else len(images)
         output = st.image(
             images[page_selector - 1],
             width=425,
