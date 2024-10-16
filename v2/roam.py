@@ -59,7 +59,7 @@ class GroqBrainUI(UI):
                 story_mk,
             )
         )
-        img = self.eyes.generate(
+        img, _ = self.eyes.generate(
             f"score_9, score_8_up, score_7_up, {prompt}",
             negative="score_6, score_5, score_4, score_3"
             + (f", {negative_add}" if negative_add else ""),

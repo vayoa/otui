@@ -183,7 +183,7 @@ if __name__ == "__main__":
 
     def generate_character(name: str, prompt: str):
         print(name)
-        img = eyes.generate(positive=prompt, lcm=True)
+        img, _ = eyes.generate(positive=prompt, lcm=True)
         if img is not None:
             img.show()
 

@@ -24,4 +24,4 @@ def generate(
         sampler_name=sampler_name,
         steps=steps,
         cfg=cfg_scale,
-    )
+    )[0]

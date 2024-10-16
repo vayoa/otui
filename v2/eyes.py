@@ -119,7 +119,7 @@ class Eyes:
 
         return workflow(
             *nodes,
-            ETN_SendImageWebSocket(images=vaed.outputs["IMAGE"]),
+            SaveImageWebsocket(images=vaed.outputs["IMAGE"]),
         )
 
     def queue_prompt(self, prompt):
@@ -130,24 +130,28 @@ class Eyes:
         req = urllib.request.Request(f"http://{self.server_address}/prompt", data=data)
         return json.loads(urllib.request.urlopen(req).read())
 
-    def get_image(self, workflow) -> Image | None:
+    def get_images(self, workflow) -> dict[str, list[Image]] | None:
         prompt_id = self.queue_prompt(workflow)["prompt_id"]
+        output_images = {}
+        current_node = ""
         while True:
             out = self.ws.recv()
             if isinstance(out, str):
                 message = json.loads(out)
-            elif isinstance(out, bytes):
-                s = struct.calcsize(">II")
-                data = memoryview(out)
-                if len(data) > s:
-                    event, format = struct.unpack_from(">II", data)
-                    # 1=PREVIEW_IMAGE, 2=PNG, see ComfyUI server.py
-                    if event == 1 and format == 2:
-                        return PIL.Image.open(io.BytesIO(data[s:]))
-                break
+                if message["type"] == "executing":
+                    data = message["data"]
+                    if data["prompt_id"] == prompt_id:
+                        if data["node"] is None:
+                            break  # Execution is done
+                        else:
+                            current_node = data["node"]
             else:
-                break
-        return
+                if current_node.endswith(OUTPUT_ID):
+                    images_output = output_images.get(current_node, [])
+                    images_output.append(PIL.Image.open(io.BytesIO(out[8:])))
+                    output_images[current_node] = images_output
+
+        return output_images
 
     def generate(
         self,
@@ -160,8 +164,8 @@ class Eyes:
         steps=None,
         sampler_name=None,
         cfg=None,
-    ) -> Image | None:
-        return self.get_image(
+    ) -> tuple[Image, dict[str, list[Image]]] | tuple[None, None]:
+        results = self.get_images(
             self.get_workflow(
                 positive,
                 negative=negative,
@@ -174,6 +178,9 @@ class Eyes:
                 cfg=cfg,
             )
         )
+        if results is not None:
+            return results["SaveImageWebsocket"][-1], results
+        return None, None
 
     def pixelize(self, img, ratio=None):
         if ratio is None:
@@ -198,7 +205,7 @@ if __name__ == "__main__":
 
     console = Console()
 
-    gen = Eyes(lcm=False, default_checkpoint="waiANINSFWPONYXL_v70.safetensors")
+    gen = Eyes(default_checkpoint="waiANINSFWPONYXL_v80.safetensors")
 
     img = gen.generate(
         "A portrait of Netta, a brunette Israeli 20 year old woman with green eyes.",

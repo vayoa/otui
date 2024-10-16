@@ -6,23 +6,29 @@ import json
 import itertools
 from PIL.Image import Image
 
+
 T = TypeVar("T")
 Output = Tuple[str, int]
 Input = Union[T, Output]
 Plug = Input[Output]
+OUTPUT_ID = "_OUTPUT"
 
 
 @dataclass
 class Node:
-    id: int = field(init=False, default_factory=lambda: next(Node._id_counter))
+    _output: bool = field(init=False, default=False)
+    id: str = field(init=False, default="")
     _id_counter = itertools.count(0)
     _title: str = field(init=False, default="")
     _outputs: Tuple = field(init=False, default=())
     outputs: Dict[str, Input] = field(init=False)
 
     def __post_init__(self):
+        class_name = self.__class__.__name__
         if not self._title:
-            self._title = self.__class__.__name__
+            self._title = class_name
+
+        self.id = f"{class_name}_{(next(Node._id_counter))}{OUTPUT_ID if self._output else ''}"
 
         self.outputs = {
             output: (str(self.id), i) for i, output in enumerate(self._outputs)
@@ -88,6 +94,7 @@ class KSampler(Node):
     denoise: Input[float] = 1
 
     _outputs = ("LATENT",)
+    _output = True
 
 
 @dataclass
@@ -201,6 +208,13 @@ class ETN_SendImageWebSocket(Node):
     format: Literal["PNG", "JPEG"] = "PNG"
 
     _title = "Send Image (WebSocket)"
+
+
+@dataclass
+class SaveImageWebsocket(Node):
+    images: Plug
+    _title = "SaveImageWebsocket"
+    _output = True
 
 
 @dataclass
