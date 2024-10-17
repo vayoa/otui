@@ -87,7 +87,7 @@ with left:
         script = code_editor(
             code=DEFAULT_SCRIPT,
             lang="python",
-            height=[24, 24],  # type: ignore
+            height=[20, 20],  # type: ignore
             options={"wrap": True},
             replace_completer=True,
             buttons=[
@@ -125,7 +125,10 @@ with left:
             ],
             props={"enableSnippets": True, "placeholder": DEFAULT_SCRIPT_HINT},
             allow_reset=True,
+            key="script-editor",
+            response_mode=["debounce", "blur"],  # type: ignore
         )
+        script = script["text"]
 
         if submitted:
             try:
