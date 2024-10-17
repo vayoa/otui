@@ -90,6 +90,16 @@ with left:
             height=[24, 24],  # type: ignore
             options={"wrap": True},
             replace_completer=True,
+            buttons=[
+                {
+                    "name": "Copy",
+                    "feather": "Copy",
+                    "hasText": False,
+                    "alwaysOn": True,
+                    "commands": ["copyAll"],
+                    "style": {"top": "0.46rem", "right": "0.4rem"},
+                }
+            ],
             completions=[
                 {
                     "caption": completion,
