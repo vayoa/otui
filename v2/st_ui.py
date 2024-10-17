@@ -1,5 +1,6 @@
 import streamlit as st
-from streamlit_ace import st_ace
+from streamlit_components.components import settings_sidebar
+from code_editor import code_editor
 from limner import main_runner as mr, drawn as d
 
 # from limner import main_runner as mr, drawn as d
@@ -57,115 +58,8 @@ def wide():
 
 wide()
 
-
 last_script = st.session_state.get("last_script", {})
-settings = {}
-
-with st.sidebar:
-    st.title("Settings")
-    defaults_tab, embeds_tab = st.tabs(("Defaults", "Embeds"))
-
-    with defaults_tab:
-        st.subheader("Canvas")
-        left, right = st.columns(2)
-        settings["canvas_width"] = left.number_input(
-            "Width", value=1280, min_value=512, step=128
-        )
-        settings["canvas_height"] = right.number_input(
-            "Height", value=1920, min_value=512, step=128
-        )
-
-        st.subheader("Panel")
-        left, right = st.columns(2)
-        settings["image_zoom"] = left.number_input(
-            "Image Zoom",
-            value=1.0,
-            min_value=0.2,
-            max_value=1.0,
-            step=0.2,
-        )
-        settings["border_width"] = right.slider(
-            "Border Width",
-            value=5,
-            min_value=0,
-            max_value=15,
-        )
-
-        left, right = st.columns(2)
-        settings["panel_min_width_percent"] = left.slider(
-            "Min Width",
-            value=0.3,
-            format="%0.3f",
-            min_value=0.0,
-            max_value=1.0,
-        )
-        settings["panel_min_height_percent"] = right.slider(
-            "Min Height",
-            value=0.3,
-            format="%0.3f",
-            min_value=0.0,
-            max_value=1.0,
-        )
-
-        st.divider()
-        st.header("Default Bubble")
-        left, middle, right = st.columns(3)
-        default_bubble = {}
-        default_bubble["font_size"] = left.number_input(
-            "Font Size",
-            value=16,
-            min_value=4,
-            max_value=40,
-        )
-        default_bubble["bubble_color"] = middle.color_picker("Bubble", value="#141414")
-        default_bubble["text_color"] = right.color_picker("Text", value="#141414")
-
-        default_bubble["font"] = "C:\\Windows\\Fonts\\Arial.ttf"
-        settings["default_bubble"] = default_bubble
-
-    with embeds_tab:
-        embeds = {}
-
-        settings["prompt_prefix"] = st.text_input(
-            "Positive Prefix",
-            value="score_9, score_8_up, score_7_up, speech bubbles",
-        )
-        settings["negative_prompt"] = st.text_input(
-            "Negative Prefix", value="score_6, score_5, score_4"
-        )
-
-        with st.expander("Concepts"):
-            concepts = st.data_editor(
-                dict(Name=["Concept1"], Tags=[""]),
-                column_config={
-                    "Name": st.column_config.TextColumn(required=True, width="small"),
-                    "Tags": st.column_config.TextColumn(required=True, width="large"),
-                },
-                use_container_width=True,
-                num_rows="dynamic",
-                key="concepts-dataeditor",
-            )
-            embeds["concepts"] = {
-                name: tags for name, tags in zip(concepts["Name"], concepts["Tags"])
-            }
-
-        with st.expander("Characters"):
-            characters = st.data_editor(
-                dict(Name=["rin"], Tags=["tohsaka rin"]),
-                column_config={
-                    "Name": st.column_config.TextColumn(required=True, width="small"),
-                    "Tags": st.column_config.TextColumn(required=True, width="large"),
-                },
-                use_container_width=True,
-                num_rows="dynamic",
-                key="characters-dataeditor",
-            )
-            embeds["characters"] = {
-                name: {"tags": tags}
-                for name, tags in zip(characters["Name"], characters["Tags"])
-            }
-
-        settings["embeds"] = embeds
+settings = settings_sidebar()
 
 left, right = st.columns(2)
 with left:
@@ -190,22 +84,41 @@ with left:
             use_container_width=True,
         )
 
-        script = st_ace(
-            value=DEFAULT_SCRIPT,
-            height=492,
-            placeholder=DEFAULT_SCRIPT_HINT,
-            language="actionscript",
-            wrap=True,
-            theme="twilight",
-            min_lines=0,
-            auto_update=True,
+        script = code_editor(
+            code=DEFAULT_SCRIPT,
+            lang="python",
+            height=[24, 24],  # type: ignore
+            options={"wrap": True},
+            replace_completer=True,
+            completions=[
+                {
+                    "caption": completion,
+                    "meta": meta,
+                    "value": value,
+                    "name": completion,
+                    "score": 100,
+                }
+                for completion, meta, value in [
+                    ("location", "embed", "location: "),
+                    ("split", "operator", "split: "),
+                    ("splith", "horizontal split", "split: h"),
+                    ("splitv", "vertical split", "split: v"),
+                    *[
+                        (concept, "concept", concept)
+                        for concept in settings["embeds"]["concepts"].keys()
+                    ],
+                    *[
+                        (char, "character", char)
+                        for char in settings["embeds"]["characters"].keys()
+                    ],
+                ]
+            ],
+            props={"enableSnippets": True, "placeholder": DEFAULT_SCRIPT_HINT},
+            allow_reset=True,
         )
 
         if submitted:
             try:
-                import random
-
-                print("hey", random.random())
                 images, new_last_script = generate(
                     script, last_script, settings, full_chk, page, panel
                 )
