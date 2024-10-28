@@ -103,6 +103,7 @@ class GroqBrainUI(UI):
                 img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
                 cv2.imshow("image", img)
                 cv2.waitKey(0)
+                # maybe use the pil show at the end
 
     def get_messages(self) -> list[Message]:
         return self.brain.messages
