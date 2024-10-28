@@ -17,8 +17,10 @@ import inspect
 from groq import Groq
 from groq.types.chat import (
     ChatCompletionMessageParam,
+    ChatCompletionUserMessageParam,
     ChatCompletion,
     ChatCompletionChunk,
+    ChatCompletionToolParam,
 )
 from groq._streaming import Stream
 from rich import print
@@ -28,8 +30,8 @@ Message = ChatCompletionMessageParam
 
 
 @dataclass
-class GroqBrain(Brain[Message]):
-    model: str = "llama-3.1-70b-versatile"
+class GroqBrain(Brain[Message, ChatCompletionToolParam]):
+    model: str = "llama-3.2-90b-text-preview"
     client: Groq = field(
         init=False,
         default_factory=lambda: Groq(
@@ -37,6 +39,7 @@ class GroqBrain(Brain[Message]):
         ),
     )
     messages: list[Message] = field(default_factory=list)
+    default_tools: Optional[list[ChatCompletionToolParam]] = None
 
     @overload
     def chat(
@@ -47,6 +50,7 @@ class GroqBrain(Brain[Message]):
         stream: Literal[False] = False,
         format: Literal["", "json"] = "",
         keep_alive: Optional[Union[float, str]] = None,
+        tools: Optional[list[ChatCompletionToolParam]] = default_tools,
     ) -> ChatCompletion: ...
 
     @overload
@@ -58,6 +62,7 @@ class GroqBrain(Brain[Message]):
         stream: Literal[True] = True,
         format: Literal["", "json"] = "",
         keep_alive: Optional[Union[float, str]] = None,
+        tools: Optional[list[ChatCompletionToolParam]] = default_tools,
     ) -> Stream[ChatCompletionChunk]: ...
 
     def chat(
@@ -68,6 +73,7 @@ class GroqBrain(Brain[Message]):
         stream: bool = False,
         format: Literal["", "json"] = "",
         keep_alive: Optional[Union[float, str]] = None,
+        tools: Optional[list[ChatCompletionToolParam]] = default_tools,
     ) -> ChatCompletion | Stream[ChatCompletionChunk]:
         if isinstance(input, str):
             input = [ChatCompletionUserMessageParam(role="user", content=input)]
@@ -85,4 +91,6 @@ class GroqBrain(Brain[Message]):
             max_tokens=1024,
             top_p=1,
             stop=None,
+            tools=tools,
+            tool_choice="auto",
         )

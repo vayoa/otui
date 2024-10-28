@@ -39,7 +39,7 @@ Tool = TypeVar("Tool")
 
 
 @dataclass
-class Brain(Generic[Message]):
+class Brain(Generic[Message, Tool]):
     model: str = field(init=False)
     messages: list[Message] = field(default_factory=list)
 
@@ -59,6 +59,7 @@ class Brain(Generic[Message]):
         stream: Literal[False] = False,
         format: Literal["", "json"] = "",
         keep_alive: Optional[Union[float, str]] = None,
+        tools: Optional[list[Tool]] = None,
     ) -> Mapping[str, Any]: ...
 
     @overload
@@ -70,6 +71,7 @@ class Brain(Generic[Message]):
         stream: Literal[True] = True,
         format: Literal["", "json"] = "",
         keep_alive: Optional[Union[float, str]] = None,
+        tools: Optional[list[Tool]] = None,
     ) -> Iterator[Mapping[str, Any]]: ...
 
     def chat(
@@ -80,4 +82,5 @@ class Brain(Generic[Message]):
         stream: bool = False,
         format: Literal["", "json"] = "",
         keep_alive: Optional[Union[float, str]] = None,
+        tools: Optional[list[Tool]] = None,
     ) -> Union[Mapping[str, Any], Iterator[Mapping[str, Any]]]: ...

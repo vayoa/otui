@@ -3,7 +3,7 @@ import base64
 import requests
 from eyes import Eyes
 
-EYES = Eyes(default_checkpoint="waiANINSFWPONYXL_v70.safetensors")
+EYES = Eyes(default_checkpoint="waiANINSFWPONYXL_v80.safetensors")
 
 
 def generate(

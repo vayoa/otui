@@ -136,6 +136,7 @@ with left:
                     script, last_script, settings, full_chk, page, panel
                 )
                 st.session_state["last_script"] = new_last_script
+                st.write(last_script)
                 st.session_state["images"] = images
             except KeyError as key:
                 st.error(f"No such embed as {key}")

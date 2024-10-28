@@ -39,7 +39,7 @@ class ToolFunction(TypedDict):
 
 
 @dataclass
-class OllamaBrain(Brain[ot.Message]):
+class OllamaBrain(Brain[ot.Message, ot.Tool]):
     model: str = "llama3.1"
     messages: list[ot.Message] = field(default_factory=list)
     tools: list[ot.Tool] = field(default_factory=list)
