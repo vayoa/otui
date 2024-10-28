@@ -19,6 +19,8 @@ from groq.types.chat import (
 )
 from rich.markdown import Markdown
 import json
+import numpy as np
+import cv2
 
 
 @dataclass(kw_only=True)
@@ -39,11 +41,11 @@ class GroqBrainUI(UI):
                         "properties": {
                             "prompt": {
                                 "type": "string",
-                                "description": "A long and detailed stable diffusion (sdxl) prompt using natural language for the scene, focusing on 2 characters at max.",
+                                "description": "A medium-length detailed stable diffusion (sdxl) prompt using natural language for the scene, focusing on 3 characters at max.",
                             },
                             "danbooru": {
                                 "type": "string",
-                                "description": "A long and detailed stable diffusion (sdxl) prompt using danbooru tags for the scene, focusing on 2 characters at max. ",
+                                "description": "A long and detailed list of danbooru tags for the scene (stable diffusion (sdxl) prompt), focusing on 3 characters at max. ",
                             },
                             "genders": {
                                 "type": "string",
@@ -76,18 +78,31 @@ class GroqBrainUI(UI):
         self.eyes = Eyes(default_checkpoint="waiANINSFWPONYXL_v80.safetensors")
 
     def generate_scene_image(self, prompt, danbooru, genders):
+        danbooru = danbooru.replace("_", " ")
+
         print(prompt)
         print(danbooru)
         print(genders)
-        img, previews = self.eyes.generate(
+
+        cv2.namedWindow("image", cv2.WINDOW_KEEPRATIO | cv2.WINDOW_GUI_NORMAL)
+        for img, previews in self.eyes.generate_yield(
             f"score_9, score_8_up, score_7_up, {prompt}, {danbooru}, {genders}",
             negative="score_6, score_5, score_4, censored",
             dimensions=(1152, 896),
             steps=25,
             sampler_name="dpmpp_2m_sde_gpu",
-        )
-        if img is not None:
-            img.show()
+        ):
+            if previews is not None:
+                preview = cv2.cvtColor(
+                    np.array(previews[list(previews.keys())[0]][-1]), cv2.COLOR_RGB2BGR
+                )
+                cv2.imshow("image", preview)
+                cv2.waitKey(1)
+
+            if img is not None:
+                img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+                cv2.imshow("image", img)
+                cv2.waitKey(0)
 
     def get_messages(self) -> list[Message]:
         return self.brain.messages

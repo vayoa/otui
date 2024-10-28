@@ -1,4 +1,5 @@
 import struct
+from typing import Generator
 import websocket  # NOTE: websocket-client (https://github.com/websocket-client/websocket-client)
 import uuid
 import json
@@ -128,7 +129,9 @@ class Eyes:
         req = urllib.request.Request(f"http://{self.server_address}/prompt", data=data)
         return json.loads(urllib.request.urlopen(req).read())
 
-    def get_images(self, workflow) -> dict[str, list[Image]] | None:
+    def get_images(
+        self, workflow
+    ) -> Generator[dict[str, list[Image]] | None, None, None]:
         self._connect()
         prompt_id = self.queue_prompt(workflow)["prompt_id"]
         output_images = {}
@@ -149,8 +152,8 @@ class Eyes:
                     images_output = output_images.get(current_node, [])
                     images_output.append(PIL.Image.open(io.BytesIO(out[8:])))
                     output_images[current_node] = images_output
+                    yield output_images
         self.close()
-        return output_images
 
     def generate(
         self,
@@ -164,7 +167,40 @@ class Eyes:
         sampler_name=None,
         cfg=None,
     ) -> tuple[Image, dict[str, list[Image]]] | tuple[None, None]:
-        results = self.get_images(
+        results = list(
+            self.get_images(
+                self.get_workflow(
+                    positive,
+                    negative=negative,
+                    dimensions=dimensions,
+                    character_image=character_image,
+                    lcm=lcm,
+                    checkpoint=checkpoint,
+                    steps=steps,
+                    sampler_name=sampler_name,
+                    cfg=cfg,
+                )
+            )
+        )[-1]
+        if results is not None:
+            keys = results.keys()
+            key = tuple(filter(lambda key: "SaveImageWebsocket" in key, keys))[-1]
+            return results[key][-1], results
+        return None, None
+
+    def generate_yield(
+        self,
+        positive,
+        negative=None,
+        dimensions=None,
+        character_image=None,
+        lcm=None,
+        checkpoint=None,
+        steps=None,
+        sampler_name=None,
+        cfg=None,
+    ) -> Generator[tuple[Image | None, dict[str, list[Image]] | None], None, None]:
+        for result in self.get_images(
             self.get_workflow(
                 positive,
                 negative=negative,
@@ -176,12 +212,12 @@ class Eyes:
                 sampler_name=sampler_name,
                 cfg=cfg,
             )
-        )
-        if results is not None:
-            keys = results.keys()
-            key = tuple(filter(lambda key: "SaveImageWebsocket" in key, keys))[-1]
-            return results[key][-1], results
-        return None, None
+        ):
+            if result is not None:
+                keys = result.keys()
+                keys = tuple(filter(lambda key: "SaveImageWebsocket" in key, keys))
+                yield result[keys[-1]][-1] if keys else None, result
+            yield None, None
 
     def pixelize(self, img, ratio=None):
         if ratio is None:
