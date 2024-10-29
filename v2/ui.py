@@ -146,6 +146,7 @@ class UI:
     args: Namespace
     prompter: Prompter = field(default_factory=lambda: Prompter())
     console: Console = field(default_factory=lambda: Console())
+    live: Live | None = None
 
     def get_messages(self) -> Sequence[Mapping]: ...
 
@@ -195,8 +196,9 @@ class UI:
         progress.start()
         return progress
 
-    def display(self, live: Live, content: str, end: bool = False):
-        live.update(Markdown(content))
+    def display(self, content: str, end: bool = False):
+        if self.live is not None:
+            self.live.update(Markdown(content))
 
     def run(self, first_ai_input=None):
         auto_hijack = self.args.auto_hijack
@@ -252,6 +254,7 @@ class UI:
                 first_ai_input = None
 
             with Live(UI.load(), console=self.console, refresh_per_second=30) as live:
+                self.live = live
                 newline = False
 
                 for chunk, content in self.respond(
@@ -264,6 +267,6 @@ class UI:
                         self.print("")
                         newline = True
 
-                    self.display(live, content)
+                    self.display(content)
 
-                self.display(live, content, end=True)
+                self.display(content, end=True)

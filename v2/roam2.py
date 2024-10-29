@@ -21,6 +21,7 @@ from rich.markdown import Markdown
 import json
 import numpy as np
 import cv2
+import threading
 
 
 @dataclass(kw_only=True)
@@ -78,87 +79,101 @@ class GroqBrainUI(UI):
         self.eyes = Eyes(default_checkpoint="waiANINSFWPONYXL_v80.safetensors")
 
     def generate_scene_image(self, prompt, danbooru, genders):
-        danbooru = danbooru.replace("_", " ")
+        if self.live is not None:
+            danbooru = danbooru.replace("_", " ")
 
-        print(prompt)
-        print(danbooru)
-        print(genders)
+            prompt_mk = Markdown(
+                "> " + ", ".join((prompt, danbooru, genders)).replace("\n", "\n> ")
+            )
 
-        cv2.namedWindow("image", cv2.WINDOW_KEEPRATIO | cv2.WINDOW_GUI_NORMAL)
-        for img, previews in self.eyes.generate_yield(
-            f"score_9, score_8_up, score_7_up, {prompt}, {danbooru}, {genders}",
-            negative="score_6, score_5, score_4, censored",
-            dimensions=(1152, 896),
-            steps=25,
-            sampler_name="dpmpp_2m_sde_gpu",
-        ):
-            if previews is not None:
-                preview = cv2.cvtColor(
-                    np.array(previews[list(previews.keys())[0]][-1]), cv2.COLOR_RGB2BGR
-                )
-                cv2.imshow("image", preview)
-                cv2.waitKey(1)
+            update = Group(
+                UI.load(description="Generating Image", style="yellow"),
+                prompt_mk,
+            )
+            self.live.update(update)
 
-            if img is not None:
-                img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-                cv2.imshow("image", img)
-                cv2.waitKey(0)
-                # maybe use the pil show at the end
+            window_name = "preview"
+            cv2.namedWindow(window_name, cv2.WINDOW_GUI_NORMAL)
+            for img, previews in self.eyes.generate_yield(
+                f"score_9, score_8_up, score_7_up, {prompt}, {danbooru}, {genders}",
+                negative="score_6, score_5, score_4, censored",
+                dimensions=(1152, 896),
+                steps=25,
+                sampler_name="dpmpp_2m_sde_gpu",
+            ):
+                if previews is not None:
+                    preview = cv2.cvtColor(
+                        np.array(previews[list(previews.keys())[0]][-1]),
+                        cv2.COLOR_RGB2BGR,
+                    )
+                    cv2.imshow(window_name, preview)
+                    cv2.waitKey(1)
+
+                if img is not None:
+                    img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+                    cv2.imshow(window_name, img)
+                    cv2.waitKey(1)
+                    # maybe use the pil show at the end
+
+            self.console.print(prompt_mk)
 
     def get_messages(self) -> list[Message]:
         return self.brain.messages
 
-    def display(self, live: Live, content: str, end: bool = False):
-        content = content.strip()
-        story_mk = Markdown(content.split("[")[0])
+    def display(self, content: str, end: bool = False):
+        if self.live is not None:
+            content = content.strip()
+            story_mk = Markdown(content)
 
-        update = story_mk
+            update = story_mk
 
-        if self.args.auto_show and "[" in content:
-            prompt = content.split("[")[-1][:-1]
-            negative_add = (
-                "4girls"
-                if "3girls" in prompt
-                else ("2girls" if "3girls" in prompt else "")
+            if self.args.auto_show and "[" in content:
+                prompt = content.split("[")[-1][:-1]
+                negative_add = (
+                    "4girls"
+                    if "3girls" in prompt
+                    else ("2girls" if "3girls" in prompt else "")
+                )
+                if not "speech bubbles" in prompt:
+                    prompt += ", speech bubbles"
+                prompt_mk = Markdown("> " + prompt.replace("\n", "> "))
+                update = Group(prompt_mk, story_mk)
+
+                if end:
+                    update = (
+                        self.display_image(story_mk, prompt, prompt_mk, negative_add)
+                        or update
+                    )
+
+            self.live.update(update)
+
+    def display_image(self, story_mk, prompt, prompt_mk, negative_add: str = ""):
+        if self.live is not None:
+            self.live.update(
+                Group(
+                    prompt_mk,
+                    UI.load(description="Generating Image", style="yellow"),
+                    story_mk,
+                )
             )
-            if not "speech bubbles" in prompt:
-                prompt += ", speech bubbles"
-            prompt_mk = Markdown("> " + prompt.replace("\n", "> "))
-            update = Group(prompt_mk, story_mk)
-
-            if end:
-                update = self.display_image(
-                    live, story_mk, prompt, prompt_mk, negative_add
+            img, _ = self.eyes.generate(
+                f"score_9, score_8_up, score_7_up, {prompt}",
+                negative="score_6, score_5, score_4, score_3"
+                + (f", {negative_add}" if negative_add else ""),
+                dimensions=(1152, 896),
+                steps=30,
+                sampler_name="dpmpp_2m_sde_gpu",
+            )
+            if img is not None:
+                img.show()
+                update = Group(
+                    prompt_mk,
+                    self.eyes.pixelize(img, ratio=0.105),
+                    Rule(style="yellow"),
+                    story_mk,
                 )
 
-        live.update(update)
-
-    def display_image(self, live, story_mk, prompt, prompt_mk, negative_add: str = ""):
-        live.update(
-            Group(
-                prompt_mk,
-                UI.load(description="Generating Image", style="yellow"),
-                story_mk,
-            )
-        )
-        img, _ = self.eyes.generate(
-            f"score_9, score_8_up, score_7_up, {prompt}",
-            negative="score_6, score_5, score_4, score_3"
-            + (f", {negative_add}" if negative_add else ""),
-            dimensions=(1152, 896),
-            steps=30,
-            sampler_name="dpmpp_2m_sde_gpu",
-        )
-        if img is not None:
-            img.show()
-            update = Group(
-                prompt_mk,
-                self.eyes.pixelize(img, ratio=0.105),
-                Rule(style="yellow"),
-                story_mk,
-            )
-
-        return update
+            return update
 
     def stream(
         self, input: str, ai: str | None
