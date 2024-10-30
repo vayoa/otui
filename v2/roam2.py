@@ -21,11 +21,11 @@ from rich.markdown import Markdown
 import json
 import numpy as np
 import cv2
-import threading
+from win32api import GetSystemMetrics
 
 
 class ToolFunctions(TypedDict):
-    display_function: Callable[[TOOL_CALL, Markdown], RenderableType]
+    display_function: Callable[[TOOL_CALL, Markdown], Optional[RenderableType]]
     function: Callable
 
 
@@ -65,6 +65,7 @@ class GroqBrainUI(UI):
             }
         ],
     )
+    first_image = True
 
     def __post_init__(self):
         self.brain = GroqBrain(
@@ -88,9 +89,7 @@ class GroqBrainUI(UI):
 
         self.eyes = Eyes(default_checkpoint="waiANINSFWPONYXL_v80.safetensors")
 
-    def generate_scene_image(
-        self, content: Markdown, prompt, danbooru, genders
-    ) -> Group:
+    def generate_scene_image(self, content: Markdown, prompt, danbooru, genders):
         danbooru = danbooru.replace("_", " ")
         prompt_mk = Markdown(
             "> " + ", ".join((prompt, danbooru, genders)).replace("\n", "\n> ")
@@ -105,11 +104,27 @@ class GroqBrainUI(UI):
             self.live.update(update)
 
             window_name = "preview"
-            cv2.namedWindow(window_name, cv2.WINDOW_GUI_NORMAL)
+            dimensions = (1152, 896)
+            if self.first_image:
+                ratio = 2
+                padding = 18
+                window_dims = dimensions[0] // ratio, dimensions[1] // ratio
+                screen_width, screen_height = GetSystemMetrics(0), GetSystemMetrics(1)
+                cv2.namedWindow(window_name, cv2.WINDOW_GUI_NORMAL)
+                # cv2.setWindowProperty(
+                #     window_name,
+                #     cv2.WND_PROP_FULLSCREEN,
+                #     cv2.WINDOW_FULLSCREEN,
+                # )
+                cv2.moveWindow(
+                    window_name, screen_width - window_dims[0] - padding, padding
+                )
+                cv2.resizeWindow(window_name, *window_dims)
+                self.first_image = False
             for img, previews in self.eyes.generate_yield(
                 f"score_9, score_8_up, score_7_up, {prompt}, {danbooru}, {genders}",
                 negative="score_6, score_5, score_4, censored",
-                dimensions=(1152, 896),
+                dimensions=dimensions,
                 steps=25,
                 sampler_name="dpmpp_2m_sde_gpu",
             ):
@@ -126,14 +141,10 @@ class GroqBrainUI(UI):
                     cv2.imshow(window_name, img)
                     cv2.waitKey(1)
                     # maybe use the pil show at the end
-
-        return Group(
-            (
-                Group(prompt_mk, Rule(style="yellow"))
-                if content.markup.strip()
-                else prompt_mk
-            ),
-            content,
+        self.console.print(
+            Group(prompt_mk, Rule(style="yellow"))
+            if content.markup.strip()
+            else prompt_mk
         )
 
     def get_messages(self) -> list[Message]:
@@ -147,8 +158,11 @@ class GroqBrainUI(UI):
 
             # because the tool will only be called once (even in streaming mode)...
             if tool_call is not None:
-                update = self.functions[tool_call["name"]]["display_function"](
-                    tool_call, update
+                update = (
+                    self.functions[tool_call["name"]]["display_function"](
+                        tool_call, update
+                    )
+                    or update
                 )
 
             self.live.update(update)
@@ -228,7 +242,6 @@ class GroqBrainUI(UI):
             self.brain.messages.append({"role": "assistant", "content": content})
 
         if tool_call_m is not None and tool_use_m is not None:
-            print("hey2")
             self.brain.messages.append(tool_call_m)
             self.brain.messages.append(tool_use_m)
 
