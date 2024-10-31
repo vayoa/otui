@@ -26,7 +26,9 @@ class ImageUpdater(QObject):
     def start_gui(self):
         # Initialize GUI on the main thread
         app = QApplication.instance() or QApplication(sys.argv)
-        self.window = ImagePreviewWindow(self)  # Initialize the window here
+        self.window = ImagePreviewWindow(
+            self, app.primaryScreen().size().toTuple()
+        )  # Initialize the window here
         self.window.show()  # Show the window immediately
         app.exec()  # This starts the Qt event loop
 
@@ -121,17 +123,22 @@ class ImageUpdater(QObject):
                 # Emit the signal to update the image in the GUI
                 self.update_image(pixmap)  # Directly call the update function
 
+                if keys:
+                    break
+
                 time.sleep(1)  # Simulate time delay for generating previews
 
 
 # GUI window class
 class ImagePreviewWindow(QMainWindow):
-    def __init__(self, image_updater: ImageUpdater):
+    def __init__(self, image_updater: ImageUpdater, screen_size):
         super().__init__()
         self.image_updater = image_updater
         self.setAttribute(Qt.WA_TranslucentBackground)  # type: ignore
         self.setWindowTitle("Image Previews")
-        self.setGeometry(100, 100, 576, 448)
+        w, h = 576, 448
+        pad = 20
+        self.setGeometry(screen_size[0] - w - pad, 2 * pad, w, h)
 
         ApplyMica(
             self.winId(),
