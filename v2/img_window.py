@@ -145,7 +145,7 @@ class ImageUpdater(QObject):
                     if keys
                     else self.feather_edges(
                         previews[list(previews.keys())[0]][-1],
-                        105 - (((105 - 35) // 24) * (i // 2)),
+                        105 - (((105 - 15) // 24) * (i // 2)),
                     )
                 )
 
