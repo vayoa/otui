@@ -162,7 +162,11 @@ class ImageUpdater(QObject):
                 if keys:
                     break
 
+<<<<<<< HEAD
                 # time.sleep(0.2)  # Simulate time delay for generating previews
+=======
+                time.sleep(1)  # Simulate time delay for generating previews
+>>>>>>> d9de556c45f51fb4e22c208ffde4a845929228b9
 
 
 # GUI window class
