@@ -80,7 +80,7 @@ class ImageUpdater(QObject):
         )
         self.preview_thread.start()
 
-    def feather_edges(self, image, fade_margin=175):
+    def feather_edges(self, image, fade_margin=15):
         # Load the image and ensure it has an alpha channel for transparency
         image = image.convert("RGBA")
 
@@ -141,14 +141,11 @@ class ImageUpdater(QObject):
                 keys = tuple(filter(lambda key: "SaveImageWebsocket" in key, keys))
                 # get the final image if ready, otherwise get previews
                 preview_image = (
-                    self.feather_edges(
-                        previews[keys[-1]][-1],
-                        35,
-                    )
+                    self.feather_edges(previews[keys[-1]][-1])
                     if keys
                     else self.feather_edges(
                         previews[list(previews.keys())[0]][-1],
-                        175 - (((175 - 35) // 24) * (i // 2)),
+                        105 - (((105 - 35) // 24) * (i // 2)),
                     )
                 )
 
@@ -161,12 +158,6 @@ class ImageUpdater(QObject):
 
                 if keys:
                     break
-
-<<<<<<< HEAD
-                # time.sleep(0.2)  # Simulate time delay for generating previews
-=======
-                time.sleep(1)  # Simulate time delay for generating previews
->>>>>>> d9de556c45f51fb4e22c208ffde4a845929228b9
 
 
 # GUI window class
