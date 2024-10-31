@@ -123,6 +123,7 @@ class GroqBrainUI(UI):
                 steps=25,
                 sampler_name="dpmpp_2m_sde_gpu",
             )
+            time.sleep(2)
 
         self.console.print(
             Group(prompt_mk, Rule(style="yellow"))

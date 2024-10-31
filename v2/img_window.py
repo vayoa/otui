@@ -5,7 +5,7 @@ import time
 from PySide6.QtCore import Qt, Signal, QObject
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QVBoxLayout, QWidget
-from PIL import Image, ImageQt  # Import Pillow modules
+from PIL import Image, ImageQt, ImageFilter, ImageDraw
 from eyes import Eyes
 
 
@@ -26,7 +26,9 @@ class ImageUpdater(QObject):
     def start_gui(self):
         # Initialize GUI on the main thread
         app = QApplication.instance() or QApplication(sys.argv)
-        self.window = ImagePreviewWindow(self)  # Initialize the window here
+        self.window = ImagePreviewWindow(
+            self, app.primaryScreen().size().toTuple()
+        )  # Initialize the window here
         self.window.show()  # Show the window immediately
         app.exec()  # This starts the Qt event loop
 
@@ -78,6 +80,34 @@ class ImageUpdater(QObject):
         )
         self.preview_thread.start()
 
+    def feather_edges(self, image, fade_margin=175):
+        # Load the image and ensure it has an alpha channel for transparency
+        image = image.convert("RGBA")
+
+        # Create a mask with a transparent center and solid edges
+        mask = Image.new("L", image.size, 0)
+        draw = ImageDraw.Draw(mask)
+
+        # Draw a filled rectangle in the center with fade_margin from the edges
+        draw.rectangle(
+            (
+                fade_margin,
+                fade_margin,
+                image.width - fade_margin,
+                image.height - fade_margin,
+            ),
+            fill=255,
+        )
+
+        # Blur the mask to create a gradient fade on the rectangle edges
+        mask = mask.filter(ImageFilter.GaussianBlur(fade_margin / 2))
+
+        # Apply the mask to the image's alpha channel to make edges transparent
+        transparent_image = image.copy()
+        transparent_image.putalpha(mask)
+
+        return transparent_image
+
     def generate_images(
         self,
         positive,
@@ -90,16 +120,18 @@ class ImageUpdater(QObject):
         sampler_name=None,
         cfg=None,
     ):
-        for _, previews in self.eyes.generate_yield(
-            positive,
-            negative=negative,
-            dimensions=dimensions,
-            character_image=character_image,
-            lcm=lcm,
-            checkpoint=checkpoint,
-            steps=steps,
-            sampler_name=sampler_name,
-            cfg=cfg,
+        for i, (_, previews) in enumerate(
+            self.eyes.generate_yield(
+                positive,
+                negative=negative,
+                dimensions=dimensions,
+                character_image=character_image,
+                lcm=lcm,
+                checkpoint=checkpoint,
+                steps=steps,
+                sampler_name=sampler_name,
+                cfg=cfg,
+            )
         ):  # Simulate 3 preview images
             if self.stop_event.is_set():  # Check if we should stop
                 return  # Exit the thread if stopping
@@ -109,9 +141,15 @@ class ImageUpdater(QObject):
                 keys = tuple(filter(lambda key: "SaveImageWebsocket" in key, keys))
                 # get the final image if ready, otherwise get previews
                 preview_image = (
-                    previews[keys[-1]][-1]
+                    self.feather_edges(
+                        previews[keys[-1]][-1],
+                        35,
+                    )
                     if keys
-                    else previews[list(previews.keys())[0]][-1]
+                    else self.feather_edges(
+                        previews[list(previews.keys())[0]][-1],
+                        175 - (((175 - 35) // 24) * (i // 2)),
+                    )
                 )
 
                 # Convert the PIL image to QPixmap
@@ -121,17 +159,22 @@ class ImageUpdater(QObject):
                 # Emit the signal to update the image in the GUI
                 self.update_image(pixmap)  # Directly call the update function
 
-                time.sleep(1)  # Simulate time delay for generating previews
+                if keys:
+                    break
+
+                # time.sleep(0.2)  # Simulate time delay for generating previews
 
 
 # GUI window class
 class ImagePreviewWindow(QMainWindow):
-    def __init__(self, image_updater: ImageUpdater):
+    def __init__(self, image_updater: ImageUpdater, screen_size):
         super().__init__()
         self.image_updater = image_updater
         self.setAttribute(Qt.WA_TranslucentBackground)  # type: ignore
         self.setWindowTitle("Image Previews")
-        self.setGeometry(100, 100, 576, 448)
+        w, h = 576, 448
+        pad = 20
+        self.setGeometry(screen_size[0] - w - pad, 2 * pad, w, h)
 
         ApplyMica(
             self.winId(),
