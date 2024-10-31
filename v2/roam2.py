@@ -22,6 +22,9 @@ import json
 import numpy as np
 import cv2
 from win32api import GetSystemMetrics
+import threading
+import time
+from img_window import ImageUpdater
 
 
 class ToolFunctions(TypedDict):
@@ -32,9 +35,10 @@ class ToolFunctions(TypedDict):
 @dataclass(kw_only=True)
 class GroqBrainUI(UI):
     brain: GroqBrain = field(init=False)
-    eyes: Eyes = field(init=False)
     functions: dict[str, ToolFunctions] = field(init=False)
     system: str = ""
+    preview_window: ImageUpdater = field(init=False)
+    gui_thread: threading.Thread = field(init=False)
     tools: list[ChatCompletionToolParam] = field(
         init=False,
         default_factory=lambda: [
@@ -65,7 +69,6 @@ class GroqBrainUI(UI):
             }
         ],
     )
-    first_image = True
 
     def __post_init__(self):
         self.brain = GroqBrain(
@@ -87,7 +90,16 @@ class GroqBrainUI(UI):
             for tool in self.brain.default_tools or {}
         ) == set(self.functions.keys())
 
-        self.eyes = Eyes(default_checkpoint="waiANINSFWPONYXL_v80.safetensors")
+        eyes = Eyes(default_checkpoint="waiANINSFWPONYXL_v80.safetensors")
+        # Initialize ImageUpdater for handling GUI updates
+        self.preview_window = ImageUpdater(eyes)
+
+        # Start GUI in a separate thread
+        self.gui_thread = threading.Thread(
+            target=self.preview_window.start_gui, daemon=True
+        )
+        self.gui_thread.start()
+        time.sleep(1)
 
     def generate_scene_image(self, content: Markdown, prompt, danbooru, genders):
         danbooru = danbooru.replace("_", " ")
@@ -103,44 +115,15 @@ class GroqBrainUI(UI):
             )
             self.live.update(update)
 
-            window_name = "preview"
             dimensions = (1152, 896)
-            if self.first_image:
-                ratio = 2
-                padding = 18
-                window_dims = dimensions[0] // ratio, dimensions[1] // ratio
-                screen_width, screen_height = GetSystemMetrics(0), GetSystemMetrics(1)
-                cv2.namedWindow(window_name, cv2.WINDOW_GUI_NORMAL)
-                # cv2.setWindowProperty(
-                #     window_name,
-                #     cv2.WND_PROP_FULLSCREEN,
-                #     cv2.WINDOW_FULLSCREEN,
-                # )
-                cv2.moveWindow(
-                    window_name, screen_width - window_dims[0] - padding, padding
-                )
-                cv2.resizeWindow(window_name, *window_dims)
-                self.first_image = False
-            for img, previews in self.eyes.generate_yield(
+            self.preview_window.preview(
                 f"score_9, score_8_up, score_7_up, {prompt}, {danbooru}, {genders}",
                 negative="score_6, score_5, score_4, censored",
                 dimensions=dimensions,
                 steps=25,
                 sampler_name="dpmpp_2m_sde_gpu",
-            ):
-                if previews is not None:
-                    preview = cv2.cvtColor(
-                        np.array(previews[list(previews.keys())[0]][-1]),
-                        cv2.COLOR_RGB2BGR,
-                    )
-                    cv2.imshow(window_name, preview)
-                    cv2.waitKey(1)
+            )
 
-                if img is not None:
-                    img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-                    cv2.imshow(window_name, img)
-                    cv2.waitKey(1)
-                    # maybe use the pil show at the end
         self.console.print(
             Group(prompt_mk, Rule(style="yellow"))
             if content.markup.strip()
