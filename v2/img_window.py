@@ -237,24 +237,3 @@ class ImagePreviewWindow(QMainWindow):
         if self.image:
             self.set_image(self.image)
         super().resizeEvent(event)
-
-
-def main():
-    # Initialize ImageUpdater for handling GUI updates
-    image_updater = ImageUpdater()
-
-    # Start GUI in a separate thread
-    gui_thread = threading.Thread(target=image_updater.start_gui, daemon=True)
-    gui_thread.start()
-
-    # Allow some time for the GUI to initialize before sending previews
-    time.sleep(1)
-    while True:
-        command = input("Press Enter to generate a preview (or type 'exit' to quit): ")
-        if command.lower() == "exit":
-            break
-        image_updater.preview()  # Start a new preview
-
-
-if __name__ == "__main__":
-    main()
