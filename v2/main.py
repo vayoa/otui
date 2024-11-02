@@ -58,6 +58,10 @@ class OllamaBrainUI(UI):
 def args(**kwargs) -> argparse.Namespace:
     kwargs["prog"] = kwargs.get("prog", "otui-v2")
     kwargs["description"] = kwargs.get("description", "Ollama Terminal User Interface")
+    defaults = {}
+    if "defaults" in kwargs:
+        defaults = kwargs["defaults"]
+        kwargs.pop("defaults")
 
     parser = argparse.ArgumentParser(**kwargs)
 
@@ -74,7 +78,7 @@ def args(**kwargs) -> argparse.Namespace:
         "--auto_hijack",
         "--ah",
         action="store_true",
-        default=True,  # TODO: CHANGE BACK!!!
+        default=kwargs.get("auto_hijack") or False,
         help="Initializes otui in auto-hijack mode.",
     )
 
@@ -82,7 +86,7 @@ def args(**kwargs) -> argparse.Namespace:
         "--auto_show",
         "--as",
         action="store_false",
-        default=False,
+        default=kwargs.get("auto_show") or False,
         help="Initializes otui in auto-show mode.",
     )
 
