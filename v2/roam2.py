@@ -37,6 +37,7 @@ class GroqBrainUI(UI):
     brain: GroqBrain = field(init=False)
     functions: dict[str, ToolFunctions] = field(init=False)
     system: str = ""
+    style: str = "anime"
     preview_window: ImageUpdater = field(init=False)
     gui_thread: threading.Thread = field(init=False)
     tools: list[ChatCompletionToolParam] = field(
@@ -60,6 +61,11 @@ class GroqBrainUI(UI):
                             "genders": {
                                 "type": "string",
                                 "description": "Description of all genders in the scene in the form of danbooru tags ('1boy, 1girl' or '2girls, 1boy' etc...).",
+                            },
+                            "style": {
+                                "type": "string",
+                                "enum": ["anime", "realistic"],
+                                "description": "The style to generate our image in.",
                             },
                         },
                         "required": ["prompt", "danbooru", "genders"],
@@ -101,13 +107,21 @@ class GroqBrainUI(UI):
         self.gui_thread.start()
         time.sleep(1)
 
-    def generate_scene_image(self, content: Markdown, prompt, danbooru, genders):
+    def generate_scene_image(self, content: Markdown, prompt, danbooru, genders, style):
         danbooru = danbooru.replace("_", " ")
+
         prompt_mk = Markdown(
             "> " + ", ".join((prompt, danbooru, genders)).replace("\n", "\n> ")
         )
 
         if self.live is not None:
+
+            if style is not None and self.style != style:
+                self.live.console.print(
+                    f"[bold yellow]Changed style to [italic]{style}."
+                )
+                self.style = style
+
             update = Group(
                 prompt_mk,
                 UI.load(description="Generating Image", style="yellow"),
@@ -122,14 +136,19 @@ class GroqBrainUI(UI):
                 dimensions=dimensions,
                 steps=25,
                 sampler_name="dpmpp_2m_sde_gpu",
+                checkpoint=(
+                    "ponyRealism_v22MainVAE.safetensors"
+                    if style == "realistic"
+                    else None
+                ),
             )
             time.sleep(2)
 
-        self.console.print(
-            Group(prompt_mk, Rule(style="yellow"))
-            if content.markup.strip()
-            else prompt_mk
-        )
+            self.live.console.print(
+                Group(prompt_mk, Rule(style="yellow"))
+                if content.markup.strip()
+                else prompt_mk
+            )
 
     def get_messages(self) -> list[Message]:
         return self.brain.messages
