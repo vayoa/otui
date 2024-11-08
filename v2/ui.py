@@ -174,6 +174,7 @@ class UI:
     prompter: Prompter = field(default_factory=lambda: Prompter())
     console: Console = field(default_factory=lambda: Console())
     live: Live | None = None
+    layout = "init"
     window: gw.Win32Window = field(init=False)
     org_win_size: tuple[int, int] = field(init=False)
     org_win_pos: tuple[int, int] = field(init=False)
@@ -236,6 +237,7 @@ class UI:
             self.live.update(Markdown(content))
 
     def set_layout(self, layout: Literal["init", "side", "game"]):
+        self.layout = layout
         match layout:
             case "init":
                 self.window.resizeTo(*self.org_win_size)
@@ -244,8 +246,8 @@ class UI:
                 self.window.resizeTo(*self.org_win_size)
                 self.window.moveTo(51, self.org_win_pos[1])
             case "game":
-                self.window.resizeTo(1089, 245)
-                self.window.moveTo(422, 824)
+                self.window.resizeTo(1089, 180)
+                self.window.moveTo(422, 845)
 
     def run(self, first_ai_input=None):
         auto_hijack = self.args.auto_hijack
@@ -260,6 +262,7 @@ class UI:
                 or user_input.strip().startswith("~q")
                 or user_input.strip().startswith("~exit")
             ):
+                self.set_layout("init")
                 break
 
             params = [p.lower().strip() for p in user_input.strip().split("~")]

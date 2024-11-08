@@ -133,13 +133,18 @@ class GroqBrainUI(UI):
                     preview_window.resizeTo(*self.initial_preview_size)
                     preview_window.moveTo(*self.initial_preview_pos)
                 case "side":
-                    preview_window.resizeTo(*self.initial_preview_size)
+                    pad = 150
+                    preview_window.resizeTo(
+                        self.initial_preview_size[0] + pad,
+                        self.org_win_size[1],
+                    )
                     preview_window.moveTo(
-                        self.initial_preview_pos[0], self.org_win_pos[1]
+                        self.initial_preview_pos[0] - pad,
+                        self.org_win_pos[1],
                     )
                 case "game":
                     preview_window.resizeTo(1818, 930)
-                    preview_window.moveTo(51, 51)
+                    preview_window.moveTo(51, 30)
         super().set_layout(layout)
 
     def generate_scene_image(self, content: Markdown, prompt, danbooru, genders, style):
