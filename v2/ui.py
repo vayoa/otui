@@ -251,6 +251,8 @@ class UI:
 
     def run(self, first_ai_input=None):
         auto_hijack = self.args.auto_hijack
+        if self.args.layout != self.layout:
+            self.set_layout(self.args.layout)
 
         user_input = ""
 

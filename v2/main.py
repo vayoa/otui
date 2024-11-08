@@ -90,6 +90,15 @@ def args(**kwargs) -> argparse.Namespace:
         help="Initializes otui in auto-show mode.",
     )
 
+    parser.add_argument(
+        "--layout",
+        "--ly",
+        action="store",
+        default="init",
+        choices=["init", "side", "game"],
+        help="The layout to launch with",
+    )
+
     return parser.parse_args()
 
 
