@@ -1,7 +1,16 @@
 from dataclasses import dataclass, field
 from argparse import Namespace
 from threading import Thread
-from typing import Any, Callable, Generator, Mapping, Optional, Sequence, TypedDict
+from typing import (
+    Any,
+    Callable,
+    Generator,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    TypedDict,
+)
 from rich.console import Console, Group
 from rich.markdown import Markdown
 from rich.progress import (
@@ -20,6 +29,7 @@ from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.key_binding import KeyBindings
 from langchain_community.chat_models import ChatOllama
 import ollama_brains as ollama_brains
+import pygetwindow as gw
 
 
 class Prompter:
@@ -43,6 +53,14 @@ class Prompter:
                 # "show | s": "generates a picture",
                 "auto-show | as": "toggle auto-show mode (generates a picture for every response)",
                 "messages | m": "shows the current message history",
+                "layout | ly": {
+                    "meta": "change the layout of the program",
+                    "commands": {
+                        "init": "The initial layout the program was launched at",
+                        "side": "A side-view layout",
+                        "game": "A game-like layout",
+                    },
+                },
             }
 
             self.commands = {
@@ -156,6 +174,15 @@ class UI:
     prompter: Prompter = field(default_factory=lambda: Prompter())
     console: Console = field(default_factory=lambda: Console())
     live: Live | None = None
+    window: gw.Win32Window = field(init=False)
+    org_win_size: tuple[int, int] = field(init=False)
+    org_win_pos: tuple[int, int] = field(init=False)
+
+    def __post_init__(self):
+        terminal = gw.getActiveWindow()
+        assert terminal is not None
+        self.window = terminal
+        self.org_win_size, self.org_win_pos = terminal.size, terminal.topleft
 
     def get_messages(self) -> Sequence[Mapping]: ...
 
@@ -208,6 +235,18 @@ class UI:
         if self.live is not None:
             self.live.update(Markdown(content))
 
+    def set_layout(self, layout: Literal["init", "side", "game"]):
+        match layout:
+            case "init":
+                self.window.resizeTo(*self.org_win_size)
+                self.window.moveTo(*self.org_win_pos)
+            case "side":
+                self.window.resizeTo(*self.org_win_size)
+                self.window.moveTo(51, self.org_win_pos[1])
+            case "game":
+                self.window.resizeTo(1089, 245)
+                self.window.moveTo(422, 824)
+
     def run(self, first_ai_input=None):
         auto_hijack = self.args.auto_hijack
 
@@ -250,6 +289,20 @@ class UI:
             show_messages_param = params.get("messages", params.get("m"))
             if show_messages_param is not None:
                 self.print(self.get_messages())
+                continue
+
+            layout_param = params.get("layout", params.get("ly"))
+            if layout_param is not None and not user_input.strip(user_input):
+                if layout_param:
+                    name = layout_param.strip()
+                    options = ["init", "side", "game"]
+                    if name in options:
+                        self.set_layout(name)  # type: ignore
+                        self.print(f"[yellow bold]Changed layout to [italic]{name}.")
+                    else:
+                        self.print(
+                            f"[red]Layout [bold italic]{name}[/] is not a valid layout.[/]"
+                        )
                 continue
 
             hijack = params.get("hijack", params.get("h"))

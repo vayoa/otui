@@ -19,6 +19,7 @@ class ImageUpdater(QObject):
         self.update_image_signal.connect(self.update_image)
         self.window = None
         self.preview_thread = None
+        self.window_title = "Image Previews"
         self.stop_event = (
             threading.Event()
         )  # Event to control the stopping of the thread
@@ -27,7 +28,7 @@ class ImageUpdater(QObject):
         # Initialize GUI on the main thread
         app = QApplication.instance() or QApplication(sys.argv)
         self.window = ImagePreviewWindow(
-            self, app.primaryScreen().size().toTuple()
+            self, self.window_title, app.primaryScreen().size().toTuple()
         )  # Initialize the window here
         self.window.show()  # Show the window immediately
         app.exec()  # This starts the Qt event loop
@@ -162,11 +163,11 @@ class ImageUpdater(QObject):
 
 # GUI window class
 class ImagePreviewWindow(QMainWindow):
-    def __init__(self, image_updater: ImageUpdater, screen_size):
+    def __init__(self, image_updater: ImageUpdater, title, screen_size):
         super().__init__()
         self.image_updater = image_updater
         self.setAttribute(Qt.WA_TranslucentBackground)  # type: ignore
-        self.setWindowTitle("Image Previews")
+        self.setWindowTitle(title)
         w, h = 576, 448
         pad = 20
         self.setGeometry(screen_size[0] - w - pad, 2 * pad, w, h)

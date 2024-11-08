@@ -1,7 +1,7 @@
 from argparse import Namespace
 from dataclasses import dataclass, field
 import re
-from typing import Callable, Generator, List, Optional, TypedDict
+from typing import Callable, Generator, List, Literal, Optional, TypedDict
 from main import args
 from groq_brains import GroqBrain, Message
 from eyes import Eyes
@@ -25,6 +25,7 @@ from win32api import GetSystemMetrics
 import threading
 import time
 from img_window import ImageUpdater
+import pygetwindow as gw
 
 
 class ToolFunctions(TypedDict):
@@ -75,6 +76,8 @@ class GroqBrainUI(UI):
             }
         ],
     )
+    initial_preview_pos: Optional[tuple[int, int]] = field(init=False, default=None)
+    initial_preview_size: Optional[tuple[int, int]] = field(init=False, default=None)
 
     def __post_init__(self):
         self.brain = GroqBrain(
@@ -96,9 +99,16 @@ class GroqBrainUI(UI):
             for tool in self.brain.default_tools or {}
         ) == set(self.functions.keys())
 
+        terminal = gw.getActiveWindow()
+        assert terminal is not None
+        self.window = terminal
+        self.org_win_size, self.org_win_pos = terminal.size, terminal.topleft
+
         eyes = Eyes(default_checkpoint="waiANINSFWPONYXL_v80.safetensors")
         # Initialize ImageUpdater for handling GUI updates
         self.preview_window = ImageUpdater(eyes)
+
+        super().__post_init__()
 
         # Start GUI in a separate thread
         self.gui_thread = threading.Thread(
@@ -106,6 +116,31 @@ class GroqBrainUI(UI):
         )
         self.gui_thread.start()
         time.sleep(1)
+
+    def set_layout(self, layout: Literal["init", "side", "game"]):
+        preview_window = gw.getWindowsWithTitle(self.preview_window.window_title)[0]
+        if preview_window is not None:
+            if self.initial_preview_pos is None or self.initial_preview_size is None:
+                self.initial_preview_size = preview_window.size
+                self.initial_preview_pos = preview_window.topleft
+
+            assert not (
+                self.initial_preview_pos is None or self.initial_preview_size is None
+            )
+
+            match layout:
+                case "init":
+                    preview_window.resizeTo(*self.initial_preview_size)
+                    preview_window.moveTo(*self.initial_preview_pos)
+                case "side":
+                    preview_window.resizeTo(*self.initial_preview_size)
+                    preview_window.moveTo(
+                        self.initial_preview_pos[0], self.org_win_pos[1]
+                    )
+                case "game":
+                    preview_window.resizeTo(1818, 930)
+                    preview_window.moveTo(51, 51)
+        super().set_layout(layout)
 
     def generate_scene_image(self, content: Markdown, prompt, danbooru, genders, style):
         danbooru = danbooru.replace("_", " ")
