@@ -1,43 +1,65 @@
 import base64
 from dataclasses import dataclass, field
 import io
-from typing import Dict, Literal, Optional, Tuple, Union, TypeVar
+from typing import (
+    Dict,
+    ForwardRef,
+    List,
+    NamedTuple,
+    Optional,
+    Tuple,
+    TypedDict,
+    Union,
+    TypeVar,
+    NewType,
+    Type,
+    Generic,
+    Union,
+    TypeVarTuple,
+    get_origin,
+    get_args,
+    get_type_hints,
+)
 import json
 import itertools
 from PIL.Image import Image
-import numpy as np
-
 
 T = TypeVar("T")
-Output = Tuple[str, int]
-Input = Union[T, Output]
-Plug = Input[Output]
+O = TypedDict
+_Out = Tuple[str, int]
 OUTPUT_ID = "_OUTPUT"
+
+Model = NewType("Model", _Out)
+Clip = NewType("Clip", _Out)
 
 
 @dataclass
-class Node:
-    _output: bool = field(init=False, default=False)
+class Node(Generic[T]):
+    _output_node: bool = field(init=False, default=False)
     id: str = field(init=False, default="")
     _id_counter = itertools.count(0)
     _class_name: Optional[str] = field(init=False, default=None)
     _title: str = field(init=False, default="")
-    _outputs: Tuple = field(init=False, default=())
-    outputs: Dict[str, Input] = field(init=False)
+    outputs: T = field(init=False)
 
     def __post_init__(self):
         self._class_name = self._class_name or self.__class__.__name__
+        self.id = f"{self._class_name}_{(next(Node._id_counter))}{OUTPUT_ID if self._output_node else ''}"
+
+        output_class = get_args(self.__orig_bases__[0])[0]  # type: ignore
+        if isinstance(output_class, ForwardRef):
+            output_class_name = output_class.__forward_arg__  # type: ignore
+            self.outputs = OUTPUT_ID  # type: ignore
+        else:
+            output_class_name = output_class.__name__
+            ts_types = output_class.__annotations__
+            self.outputs = {t: ts_types[t]((self.id, i)) for i, t in enumerate(ts_types)}  # type: ignore
+
         if not self._title:
-            self._title = self._class_name
-
-        self.id = f"{self._class_name}_{(next(Node._id_counter))}{OUTPUT_ID if self._output else ''}"
-
-        self.outputs = {
-            output: (str(self.id), i) for i, output in enumerate(self._outputs)
-        }
+            self._title = output_class_name
 
     def rename(self, new_id: str):
-        if self._output and not new_id.endswith(OUTPUT_ID):
+        if self._output_node and not new_id.endswith(OUTPUT_ID):
             new_id += OUTPUT_ID
         self.id = new_id
         return self
@@ -48,157 +70,121 @@ class Node:
                 "inputs": {
                     key: self.__dict__[key]
                     for key in self.__dict__
-                    if key not in ("id", "_outputs", "outputs")
+                    if key
+                    not in ("id", "outputs", "_output_node", "_class_name", "_title")
                 },
                 "class_type": self._class_name,
                 "_meta": {"title": self._title},
             }
         }
 
-    @staticmethod
-    def from_json(j: dict):
 
-        inputs = [
-            f"{key}: Plug" if isinstance(val, list) else f"{key}: Input = {repr(val)}"
-            for key, val in j["inputs"].items()
-        ]
-        inputs = "\n\t".join(inputs)
-
-        name = j["class_type"]
-        title = j["_meta"]["title"]
-        title = f'\t_title = "{title}"'
-
-        c = f"""
-@dataclass    
-class {name}(Node):
-\t{inputs}
-
-{title}
-
- (\t_outputs = ()
-    """
-        return c
-
-
-def workflow(*nodes: Node) -> str:
+def workflow(*nodes: Node) -> dict:
     j = {}
     for node in nodes:
         j.update(node.json())
     return j
 
 
-@dataclass
-class KSampler(Node):
-    model: Plug
-    positive: Plug
-    negative: Plug
-    latent_image: Plug
-
-    seed: Input[int]
-    steps: Input[int] = 20
-    cfg: Input[float] = 8
-    sampler_name: Input[str] = "dpmpp_sde"
-    scheduler: Input[str] = "karras"
-    denoise: Input[float] = 1
-
-    _outputs = ("LATENT",)
-    _output = True
+MODEL = NewType("MODEL", _Out)
+CONDITIONING = NewType("CONDITIONING", _Out)
+LATENT = NewType("LATENT", _Out)
+CLIP = NewType("CLIP", _Out)
+VAE = NewType("VAE", _Out)
+IMAGE = NewType("IMAGE", _Out)
+IPADAPTER = NewType("IPADAPTER", _Out)
+CLIP_VISION = NewType("CLIP_VISION", _Out)
+INSIGHTFACE = NewType("INSIGHTFACE", _Out)
+MASK = NewType("MASK", _Out)
+SAM_MODEL = NewType("SAM_MODEL", _Out)
+GROUNDING_DINO_MODEL = NewType("GROUNDING_DINO_MODEL", _Out)
 
 
 @dataclass
-class CheckpointLoaderSimple(Node):
-    ckpt_name: Input[str] = "realisticVisionV51_v51VAE.safetensors"
+class KSampler(Node[O("KSampler", {"LATENT": LATENT})]):
+    model: MODEL
+    positive: CONDITIONING
+    negative: CONDITIONING
+    latent_image: LATENT
 
-    _title = "Load Checkpoint"
+    seed: int
+    steps: int = 20
+    cfg: float = 8
+    sampler_name: str = "dpmpp_sde"
+    scheduler: str = "karras"
+    denoise: float = 1
 
-    _outputs = ("MODEL", "CLIP", "VAE")
-
-
-@dataclass
-class CLIPTextEncode(Node):
-    clip: Plug
-    text: Input[str]
-
-    _title = "CLIP Text Encode (Prompt)"
-
-    _outputs = ("CONDITIONING",)
+    _output_node = True
 
 
 @dataclass
-class VAEDecode(Node):
-    samples: Plug
-    vae: Plug
-
-    _title = "VAE Decode"
-
-    _outputs = ("IMAGE",)
+class CheckpointLoaderSimple(
+    Node[O("Load Checkpoint", {"MODEL": MODEL, "CLIP": CLIP, "VAE": VAE})]
+):
+    ckpt_name: str = "realisticVisionV51_v51VAE.safetensors"
 
 
 @dataclass
-class EmptyLatentImage(Node):
-    width: Input[int] = 512
-    height: Input[int] = 816
-    batch_size: Input = 1
-
-    _title = "Empty Latent Image"
-
-    _outputs = ("LATENT",)
+class CLIPTextEncode(
+    Node[O("CLIP Text Encode (Prompt)", {"CONDITIONING": CONDITIONING})]
+):
+    clip: CLIP
+    text: str
 
 
 @dataclass
-class IPAdapterFaceID(Node):
-    model: Plug
-    ipadapter: Plug
-    image: Plug
-    clip_vision: Plug
-    insightface: Plug
-    weight: Input[float] = 0.85
-    weight_faceidv2: Input[float] = 1
-    weight_type: Input[str] = "linear"
-    combine_embeds: Input[str] = "concat"
-    start_at: Input[float] = 0
-    end_at: Input[float] = 1
-    embeds_scaling: Input[str] = "V only"
-
-    _title = "IPAdapter FaceID"
-
-    _outputs = ("MODEL", "face_image")
+class VAEDecode(Node[O("VAE Decode", {"IMAGE": IMAGE})]):
+    samples: LATENT
+    vae: VAE
 
 
 @dataclass
-class IPAdapterModelLoader(Node):
-    ipadapter_file: Input[str] = "ip-adapter-faceid-plusv2_sd15.bin"
-
-    _title = "IPAdapter Model Loader"
-
-    _outputs = ("IPADAPTER",)
+class EmptyLatentImage(Node[O("Empty Latent Image", {"LATENT": LATENT})]):
+    width: int = 512
+    height: int = 816
+    batch_size: int = 1
 
 
 @dataclass
-class CLIPVisionLoader(Node):
-    clip_name: Input[str] = "clip-vision_vit-h.safetensors"
-
-    _title = "Load CLIP Vision"
-
-    _outputs = ("CLIP_VISION",)
+class IPAdapterFaceID(
+    Node[O("IPAdapter FaceID", {"MODEL": MODEL, "face_image": IMAGE})]
+):
+    model: MODEL
+    ipadapter: IPADAPTER
+    image: IMAGE
+    clip_vision: CLIP_VISION
+    insightface: INSIGHTFACE
+    weight: float = 0.85
+    weight_faceidv2: float = 1
+    weight_type: str = "linear"
+    combine_embeds: str = "concat"
+    start_at: float = 0
+    end_at: float = 1
+    embeds_scaling: str = "V only"
 
 
 @dataclass
-class IPAdapterInsightFaceLoader(Node):
-    provider: Input[str] = "CPU"
-
-    _title = "IPAdapter InsightFace Loader"
-
-    _outputs = ("INSIGHTFACE",)
+class IPAdapterModelLoader(Node[O("IPAdapter Model Loader", {"IPADAPTER": IPADAPTER})]):
+    ipadapter_file: str = "ip-adapter-faceid-plusv2_sd15.bin"
 
 
 @dataclass
-class ETN_LoadImageBase64(Node):
-    image: Input[Union[str, Image]]
+class CLIPVisionLoader(Node[O("Load CLIP Vision", {"CLIP_VISION": CLIP_VISION})]):
+    clip_name: str = "clip-vision_vit-h.safetensors"
 
-    _title = "Load Image (Base64)"
 
-    _outputs = ("IMAGE", "MASK")
+@dataclass
+class IPAdapterInsightFaceLoader(
+    Node[O("IPAdapter InsightFace Loader", {"INSIGHTFACE": INSIGHTFACE})]
+):
+    provider: str = "CPU"
+
+
+@dataclass
+class ETN_LoadImageBase64(
+    Node[O("Load Image (Base64)", {"IMAGE": IMAGE, "MASK": MASK})]
+):
+    image: Union[str, Image]
 
     def __post_init__(self):
         super().__post_init__()
@@ -211,93 +197,76 @@ class ETN_LoadImageBase64(Node):
 
 
 @dataclass
-class ETN_SendImageWebSocket(Node):
-    images: Plug
-    format: Literal["PNG", "JPEG"] = "PNG"
-
-    _title = "Send Image (WebSocket)"
+class SaveImageWebsocket(Node["SaveImageWebsocket"]):
+    images: IMAGE
+    _output_node = True
 
 
 @dataclass
-class SaveImageWebsocket(Node):
-    images: Plug
-    _title = "SaveImageWebsocket"
-    _output = True
+class LoraLoader(Node[O("Load LoRA", {"MODEL": MODEL, "CLIP": CLIP})]):
+    model: MODEL
+    clip: CLIP
+    lora_name: str = "lcm-lora-sdv1-5.safetensors"
+    strength_model: float = 1
+    strength_clip: float = 1
 
 
 @dataclass
-class LoraLoader(Node):
-    model: Plug
-    clip: Plug
-    lora_name: Input[str] = "lcm-lora-sdv1-5.safetensors"
-    strength_model: Input[float] = 1
-    strength_clip: Input[float] = 1
-
-    _title = "Load LoRA"
-
-    _outputs = ("MODEL", "CLIP")
-
-
-@dataclass
-class SamModelLoader(Node):
-    model_name: Input[str] = "sam_vit_b (375MB)"
+class SamModelLoader(
+    Node[O("SAMModelLoader (segment anything)", {"SAM_MODEL": SAM_MODEL})]
+):
+    model_name: str = "sam_vit_b (375MB)"
     _class_name = "SAMModelLoader (segment anything)"
-    _title = "SAMModelLoader (segment anything)"
-
-    _outputs = ("SAM_MODEL",)
 
 
 @dataclass
-class GroundingDinoModelLoader(Node):
-    model_name: Input[str] = "GroundingDINO_SwinB (938MB)"
+class GroundingDinoModelLoader(
+    Node[
+        O(
+            "SAMModelLoader (segment anything)",
+            {"GROUNDING_DINO_MODEL": GROUNDING_DINO_MODEL},
+        )
+    ]
+):
+    model_name: str = "GroundingDINO_SwinB (938MB)"
     _class_name = "GroundingDinoModelLoader (segment anything)"
-    _title = "GroundingDinoModelLoader (segment anything)"
-
-    _outputs = ("GROUNDING_DINO_MODEL",)
 
 
 @dataclass
-class GroundingDinoSAMSegment(Node):
-    sam_model: Plug
-    grounding_dino_model: Plug
-    image: Input[np.ndarray]
+class GroundingDinoSAMSegment(
+    Node[
+        O("GroundingDinoSAMSegment (segment anything)", {"IMAGE": IMAGE, "MASK": MASK})
+    ]
+):
+    sam_model: SAM_MODEL
+    grounding_dino_model: GROUNDING_DINO_MODEL
+    image: IMAGE
 
-    prompt: Input[str]
-    threshold: Input[float] = 0.3
+    prompt: str
+    threshold: float = 0.3
 
     _class_name = "GroundingDinoSAMSegment (segment anything)"
-    _title = "GroundingDinoSAMSegment (segment anything)"
-
-    _outputs = ("IMAGE", "MASK")
 
 
 @dataclass
-class InvertMask(Node):
-    mask: Plug
-
-    _outputs = ("MASK",)
+class InvertMask(Node[O("InvertMask", {"MASK": MASK})]):
+    mask: MASK
 
 
 @dataclass
-class MaskToImage(Node):
-    mask: Plug
-
-    _title = "Convert Mask to Image"
-
-    _outputs = ("IMAGE",)
+class MaskToImage(Node[O("Convert Mask to Image", {"IMAGE": IMAGE})]):
+    mask: MASK
 
 
 @dataclass
-class ImageCompositeMasked(Node):
-    destination: Plug
-    source: Plug
-    mask: Plug
+class ImageCompositeMasked(Node[O("ImageCompositeMasked", {"IMAGE": IMAGE})]):
+    destination: IMAGE
+    source: IMAGE
+    mask: MASK
 
-    x: Input[int] = 0
-    y: Input[int] = 0
-    resize_source: Input[bool] = False
-
-    _outputs = ("IMAGE",)
+    x: int = 0
+    y: int = 0
+    resize_source: bool = False
 
 
 if __name__ == "__main__":
@@ -328,6 +297,6 @@ if __name__ == "__main__":
                 )
             ),
             (vaed := VAEDecode(samples=ks.outputs["LATENT"], vae=cl.outputs["VAE"])),
-            ETN_SendImageWebSocket(images=vaed.outputs["IMAGE"]),
+            SaveImageWebsocket(images=vaed.outputs["IMAGE"]),
         )
     )

@@ -3,5 +3,8 @@
     "python.analysis.typeCheckingMode": "basic",
     "cSpell.words": [
         "roleplay"
+    ],
+    "cSpell.enableFiletypes": [
+        "!python"
     ]
 }
