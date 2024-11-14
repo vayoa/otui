@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt, Signal, QObject
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QVBoxLayout, QWidget
 from PIL import Image, ImageQt, ImageFilter, ImageDraw
+import bubble_painter
 from eyes import Eyes
 
 
@@ -48,6 +49,7 @@ class ImageUpdater(QObject):
         steps=None,
         sampler_name=None,
         cfg=None,
+        dialog=None,
     ):
         # If the window is hidden, show it
         if self.window.isHidden():
@@ -76,6 +78,7 @@ class ImageUpdater(QObject):
                 steps=steps,
                 sampler_name=sampler_name,
                 cfg=cfg,
+                dialog=dialog,
             ),
             daemon=True,
         )
@@ -120,6 +123,7 @@ class ImageUpdater(QObject):
         steps=None,
         sampler_name=None,
         cfg=None,
+        dialog=None,
     ):
         for i, (_, previews) in enumerate(
             self.eyes.generate_yield(
@@ -138,16 +142,25 @@ class ImageUpdater(QObject):
                 return  # Exit the thread if stopping
 
             if previews is not None:
-                keys = previews.keys()
-                keys = tuple(filter(lambda key: "SaveImageWebsocket" in key, keys))
+                final_image_exists = previews.keys()
+                final_image_exists = tuple(
+                    filter(lambda key: "SaveImageWebsocket" in key, final_image_exists)
+                )
+
+                image = (
+                    previews[final_image_exists[-1]][-1]
+                    if final_image_exists
+                    else previews[list(previews.keys())[0]][-1]
+                )
+
+                if final_image_exists and dialog:
+                    image = bubble_painter.add_dialog(self.eyes, image, dialog)[-1]
+
                 # get the final image if ready, otherwise get previews
                 preview_image = (
-                    self.feather_edges(previews[keys[-1]][-1])
-                    if keys
-                    else self.feather_edges(
-                        previews[list(previews.keys())[0]][-1],
-                        75 - (((75 - 15) // 24) * (i // 2)),
-                    )
+                    self.feather_edges(image)
+                    if final_image_exists
+                    else self.feather_edges(image, 75 - (((75 - 15) // 24) * (i // 2)))
                 )
 
                 # Convert the PIL image to QPixmap
@@ -157,7 +170,7 @@ class ImageUpdater(QObject):
                 # Emit the signal to update the image in the GUI
                 self.update_image(pixmap)  # Directly call the update function
 
-                if keys:
+                if final_image_exists:
                     break
 
 

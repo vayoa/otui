@@ -56,11 +56,12 @@ class Prompter:
                 "layout | ly": {
                     "meta": "change the layout of the program",
                     "commands": {
-                        "init": "The initial layout the program was launched at",
-                        "side": "A side-view layout",
-                        "game": "A game-like layout",
+                        "init": "the initial layout the program was launched at",
+                        "side": "a side-view layout",
+                        "game": "a game-like layout",
                     },
                 },
+                "dialog | d": "toggle dialog in images",
             }
 
             self.commands = {
@@ -249,6 +250,9 @@ class UI:
                 self.window.resizeTo(1089, 180)
                 self.window.moveTo(422, 845)
 
+    def handle_params(self, params) -> bool:
+        return False
+
     def run(self, first_ai_input=None):
         auto_hijack = self.args.auto_hijack
         if self.args.layout != self.layout:
@@ -303,11 +307,14 @@ class UI:
                     options = ["init", "side", "game"]
                     if name in options:
                         self.set_layout(name)  # type: ignore
-                        self.print(f"[yellow bold]Changed layout to [italic]{name}.")
+                        self.print(f"[orange bold]Changed layout to [italic]{name}.")
                     else:
                         self.print(
                             f"[red]Layout [bold italic]{name}[/] is not a valid layout.[/]"
                         )
+                continue
+
+            if self.handle_params(params):
                 continue
 
             hijack = params.get("hijack", params.get("h"))

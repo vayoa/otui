@@ -7,7 +7,6 @@ import urllib.request
 import urllib.parse
 import io
 import random
-import base64
 import PIL.Image
 from rich_pixels import Pixels
 from nodes import *

@@ -1,10 +1,11 @@
 import base64
 from dataclasses import dataclass, field
 import io
-from typing import Dict, Literal, Tuple, Union, TypeVar
+from typing import Dict, Literal, Optional, Tuple, Union, TypeVar
 import json
 import itertools
 from PIL.Image import Image
+import numpy as np
 
 
 T = TypeVar("T")
@@ -19,20 +20,27 @@ class Node:
     _output: bool = field(init=False, default=False)
     id: str = field(init=False, default="")
     _id_counter = itertools.count(0)
+    _class_name: Optional[str] = field(init=False, default=None)
     _title: str = field(init=False, default="")
     _outputs: Tuple = field(init=False, default=())
     outputs: Dict[str, Input] = field(init=False)
 
     def __post_init__(self):
-        class_name = self.__class__.__name__
+        self._class_name = self._class_name or self.__class__.__name__
         if not self._title:
-            self._title = class_name
+            self._title = self._class_name
 
-        self.id = f"{class_name}_{(next(Node._id_counter))}{OUTPUT_ID if self._output else ''}"
+        self.id = f"{self._class_name}_{(next(Node._id_counter))}{OUTPUT_ID if self._output else ''}"
 
         self.outputs = {
             output: (str(self.id), i) for i, output in enumerate(self._outputs)
         }
+
+    def rename(self, new_id: str):
+        if self._output and not new_id.endswith(OUTPUT_ID):
+            new_id += OUTPUT_ID
+        self.id = new_id
+        return self
 
     def json(self) -> Dict:
         return {
@@ -42,7 +50,7 @@ class Node:
                     for key in self.__dict__
                     if key not in ("id", "_outputs", "outputs")
                 },
-                "class_type": self.__class__.__name__,
+                "class_type": self._class_name,
                 "_meta": {"title": self._title},
             }
         }
@@ -228,6 +236,68 @@ class LoraLoader(Node):
     _title = "Load LoRA"
 
     _outputs = ("MODEL", "CLIP")
+
+
+@dataclass
+class SamModelLoader(Node):
+    model_name: Input[str] = "sam_vit_b (375MB)"
+    _class_name = "SAMModelLoader (segment anything)"
+    _title = "SAMModelLoader (segment anything)"
+
+    _outputs = ("SAM_MODEL",)
+
+
+@dataclass
+class GroundingDinoModelLoader(Node):
+    model_name: Input[str] = "GroundingDINO_SwinB (938MB)"
+    _class_name = "GroundingDinoModelLoader (segment anything)"
+    _title = "GroundingDinoModelLoader (segment anything)"
+
+    _outputs = ("GROUNDING_DINO_MODEL",)
+
+
+@dataclass
+class GroundingDinoSAMSegment(Node):
+    sam_model: Plug
+    grounding_dino_model: Plug
+    image: Input[np.ndarray]
+
+    prompt: Input[str]
+    threshold: Input[float] = 0.3
+
+    _class_name = "GroundingDinoSAMSegment (segment anything)"
+    _title = "GroundingDinoSAMSegment (segment anything)"
+
+    _outputs = ("IMAGE", "MASK")
+
+
+@dataclass
+class InvertMask(Node):
+    mask: Plug
+
+    _outputs = ("MASK",)
+
+
+@dataclass
+class MaskToImage(Node):
+    mask: Plug
+
+    _title = "Convert Mask to Image"
+
+    _outputs = ("IMAGE",)
+
+
+@dataclass
+class ImageCompositeMasked(Node):
+    destination: Plug
+    source: Plug
+    mask: Plug
+
+    x: Input[int] = 0
+    y: Input[int] = 0
+    resize_source: Input[bool] = False
+
+    _outputs = ("IMAGE",)
 
 
 if __name__ == "__main__":

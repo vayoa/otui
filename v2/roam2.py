@@ -147,12 +147,39 @@ class GroqBrainUI(UI):
                     preview_window.moveTo(51, 30)
         super().set_layout(layout)
 
-    def generate_scene_image(self, content: Markdown, prompt, danbooru, genders, style):
+    def handle_params(self, params) -> bool:
+        dialog_param = params.get("dialog", params.get("d"))
+        if dialog_param is not None:
+            func_id = [
+                i
+                for i, tool in enumerate(self.tools)
+                if tool["function"]["name"] == "generate_scene_image"
+            ][0]
+            on = "dialog" in self.tools[func_id]["function"]["parameters"]["properties"]  # type: ignore
+            dialog = {
+                "type": "string",
+                "description": "If a character is saying something in the scene, this is her dialog.",
+            }
+            if on:
+                self.tools[func_id]["function"]["parameters"]["properties"].pop("dialog")  # type: ignore
+            else:
+                self.tools[func_id]["function"]["parameters"]["properties"]["dialog"] = dialog  # type: ignore
+            self.print(
+                f"[orange bold]Dialog in images is now [italic]{'[bold red]OFF[/]' if on else '[bold green]ON[/]'}."
+            )
+            return True
+        return False
+
+    def generate_scene_image(
+        self, content: Markdown, prompt, danbooru, genders, style=None, dialog=None
+    ):
         danbooru = danbooru.replace("_", " ")
 
-        prompt_mk = Markdown(
-            "> " + ", ".join((prompt, danbooru, genders)).replace("\n", "\n> ")
-        )
+        prompt = f"{prompt}, {danbooru}, {genders}"
+        if dialog and "speech_bubble" not in prompt and "speech bubble" not in prompt:
+            prompt += ", speech_bubble"
+
+        prompt_mk = Markdown("> " + prompt.replace("\n", "\n> "))
 
         if self.live is not None:
 
@@ -161,6 +188,9 @@ class GroqBrainUI(UI):
                     f"[bold yellow]Changed style to [italic]{style}."
                 )
                 self.style = style
+
+            if dialog:
+                self.live.console.print(f'[bold blue]Dialog: [italic]"{dialog}"')
 
             update = Group(
                 prompt_mk,
@@ -171,7 +201,7 @@ class GroqBrainUI(UI):
 
             dimensions = (1152, 896)
             self.preview_window.preview(
-                f"score_9, score_8_up, score_7_up, {prompt}, {danbooru}, {genders}",
+                f"score_9, score_8_up, score_7_up, {prompt}",
                 negative="score_6, score_5, score_4, censored",
                 dimensions=dimensions,
                 steps=25,
@@ -181,6 +211,7 @@ class GroqBrainUI(UI):
                     if style == "realistic"
                     else None
                 ),
+                dialog=dialog,
             )
             time.sleep(2)
 
