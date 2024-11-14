@@ -9,6 +9,7 @@ import io
 import random
 import PIL.Image
 from rich_pixels import Pixels
+import bubble_painter
 from nodes import *
 
 
@@ -59,6 +60,7 @@ class Eyes:
         steps=None,
         sampler_name=None,
         cfg=None,
+        dialog=False,
     ):
 
         lcm = lcm if lcm is not None else self.lcm
@@ -117,10 +119,15 @@ class Eyes:
 
             nodes += [ipaml, cvl, ipaifl, ci, ipafi]
 
-        return workflow(
-            *nodes,
-            SaveImageWebsocket(images=vaed.outputs["IMAGE"]),
-        )
+        if dialog:
+            return workflow(
+                *nodes, SaveImageWebsocket(images=vaed.outputs["IMAGE"])
+            ) | bubble_painter.clear_bubbles_workflow(vaed.outputs["IMAGE"])
+        else:
+            return workflow(
+                *nodes,
+                SaveImageWebsocket(images=vaed.outputs["IMAGE"]),
+            )
 
     def queue_prompt(self, prompt):
         p = {"prompt": prompt, "client_id": self.client_id}
@@ -198,6 +205,7 @@ class Eyes:
         steps=None,
         sampler_name=None,
         cfg=None,
+        dialog=None,
     ) -> Generator[tuple[Image | None, dict[str, list[Image]] | None], None, None]:
         for result in self.get_images(
             self.get_workflow(
@@ -210,12 +218,27 @@ class Eyes:
                 steps=steps,
                 sampler_name=sampler_name,
                 cfg=cfg,
+                dialog=bool(dialog),
             )
         ):
             if result is not None:
                 keys = result.keys()
-                keys = tuple(filter(lambda key: "SaveImageWebsocket" in key, keys))
-                yield result[keys[-1]][-1] if keys else None, result
+                final_image = tuple(
+                    filter(lambda key: "SaveImageWebsocket" in key, keys)
+                )
+                if (
+                    final_image
+                    and dialog
+                    and len(
+                        tuple(
+                            filter(lambda key: "final" in key or "bubbles" in key, keys)
+                        )
+                    )
+                    == 2
+                ):
+                    image = bubble_painter.add_text(result, dialog)
+                    result[final_image[-1]][-1] = image
+                yield result[final_image[-1]][-1] if final_image else None, result
             yield None, None
 
     def pixelize(self, img, ratio=None):

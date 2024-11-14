@@ -136,15 +136,24 @@ class ImageUpdater(QObject):
                 steps=steps,
                 sampler_name=sampler_name,
                 cfg=cfg,
+                dialog=dialog,
             )
         ):  # Simulate 3 preview images
             if self.stop_event.is_set():  # Check if we should stop
                 return  # Exit the thread if stopping
 
             if previews is not None:
-                final_image_exists = previews.keys()
+                keys = previews.keys()
                 final_image_exists = tuple(
-                    filter(lambda key: "SaveImageWebsocket" in key, final_image_exists)
+                    filter(lambda key: "SaveImageWebsocket" in key, keys)
+                )
+                dialog_exists = (
+                    len(
+                        tuple(
+                            filter(lambda key: "final" in key or "bubbles" in key, keys)
+                        )
+                    )
+                    == 2
                 )
 
                 image = (
@@ -153,13 +162,14 @@ class ImageUpdater(QObject):
                     else previews[list(previews.keys())[0]][-1]
                 )
 
-                if final_image_exists and dialog:
-                    image = bubble_painter.add_dialog(self.eyes, image, dialog)[-1]
+                absolute_final_exists = final_image_exists and (
+                    (dialog and dialog_exists) or not dialog
+                )
 
                 # get the final image if ready, otherwise get previews
                 preview_image = (
                     self.feather_edges(image)
-                    if final_image_exists
+                    if absolute_final_exists
                     else self.feather_edges(image, 75 - (((75 - 15) // 24) * (i // 2)))
                 )
 
@@ -170,7 +180,7 @@ class ImageUpdater(QObject):
                 # Emit the signal to update the image in the GUI
                 self.update_image(pixmap)  # Directly call the update function
 
-                if final_image_exists:
+                if absolute_final_exists:
                     break
 
 

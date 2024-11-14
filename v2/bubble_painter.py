@@ -5,7 +5,6 @@ import cv2
 import numpy as np
 from typing import List, Tuple
 from PIL import Image
-from eyes import Eyes
 import nodes
 
 
@@ -224,14 +223,13 @@ def add_text_to_bubbles(
     return processed_images
 
 
-def clear_bubbles(eyes: Eyes, img: Image.Image):
+def clear_bubbles_workflow(image_node_output: nodes.IMAGE):
     sam = nodes.SamModelLoader()
     dino = nodes.GroundingDinoModelLoader()
-    image_node = nodes.ETN_LoadImageBase64(image=img)
     segment = nodes.GroundingDinoSAMSegment(
         sam_model=sam.outputs["SAM_MODEL"],
         grounding_dino_model=dino.outputs["GROUNDING_DINO_MODEL"],
-        image=image_node.outputs["IMAGE"],
+        image=image_node_output,
         prompt="white comic text bubble with text",
         threshold=0.3,
     )
@@ -239,57 +237,65 @@ def clear_bubbles(eyes: Eyes, img: Image.Image):
     convert_mask = nodes.MaskToImage(segment.outputs["MASK"])
     composite = nodes.ImageCompositeMasked(
         destination=convert_mask.outputs["IMAGE"],
-        source=image_node.outputs["IMAGE"],
+        source=image_node_output,
         mask=invert.outputs["MASK"],
     )
-    workflow_nodes = [sam, dino, image_node, segment, invert, convert_mask, composite]
-    images = list(
-        eyes.get_images(
-            nodes.workflow(
-                *workflow_nodes,
-                nodes.SaveImageWebsocket(images=convert_mask.outputs["IMAGE"]).rename(
-                    "bubbles"
-                ),
-                nodes.SaveImageWebsocket(images=composite.outputs["IMAGE"]).rename(
-                    "final"
-                ),
-            )
-        )
+    workflow_nodes = [sam, dino, segment, invert, convert_mask, composite]
+    return nodes.workflow(
+        *workflow_nodes,
+        nodes.SaveImageWebsocket(images=convert_mask.outputs["IMAGE"]).rename(
+            "bubbles"
+        ),
+        nodes.SaveImageWebsocket(images=composite.outputs["IMAGE"]).rename("final"),
     )
-    return images
 
 
-def add_dialog(
-    eyes: Eyes, images: list[Image.Image] | Image.Image, texts: list[str]
-) -> list[Image.Image]:
-    if not isinstance(images, list):
-        images = [images]
-
-    if not isinstance(texts, list):
-        texts = [texts]
-
-    empty_images, masks = [], []
-
-    for image in images:
-        results = clear_bubbles(eyes, image)[-1]
-        if results is not None:
-            results = {result: results[result][-1] for result in results}
-            masks.append(
-                cv2.cvtColor(np.array(results["bubbles_OUTPUT"]), cv2.COLOR_RGB2BGR)
-            )
-            empty_images.append(
-                cv2.cvtColor(np.array(results["final_OUTPUT"]), cv2.COLOR_RGB2BGR)
-            )
-
-    # Process images and add text to bubbles
-    return [
-        Image.fromarray(image)
-        for image in add_text_to_bubbles(empty_images, masks, texts)
-    ]
+def add_text(results, text) -> Image.Image:
+    results = {result: results[result][-1] for result in results}
+    mask = cv2.cvtColor(np.array(results["bubbles_OUTPUT"]), cv2.COLOR_RGB2BGR)
+    empty_image = cv2.cvtColor(np.array(results["final_OUTPUT"]), cv2.COLOR_RGB2BGR)
+    return Image.fromarray(add_text_to_bubbles([empty_image], [mask], [text])[-1])
 
 
 if __name__ == "__main__":
-    from rich import print
+    from eyes import Eyes
+
+    def clear_bubbles(eyes: Eyes, img: Image.Image):
+        load_image_node = nodes.ETN_LoadImageBase64(image=img)
+        return list(
+            eyes.get_images(
+                {**load_image_node.json()}
+                | clear_bubbles_workflow(load_image_node.outputs["IMAGE"])
+            )
+        )
+
+    def add_dialog(
+        eyes: Eyes, images: list[Image.Image] | Image.Image, texts: list[str]
+    ) -> list[Image.Image]:
+        if not isinstance(images, list):
+            images = [images]
+
+        if not isinstance(texts, list):
+            texts = [texts]
+
+        empty_images, masks = [], []
+
+        for image in images:
+            results = clear_bubbles(eyes, image)[-1]
+            if results is not None:
+                results = {result: results[result][-1] for result in results}
+                masks.append(
+                    cv2.cvtColor(np.array(results["bubbles_OUTPUT"]), cv2.COLOR_RGB2BGR)
+                )
+                empty_images.append(
+                    cv2.cvtColor(np.array(results["final_OUTPUT"]), cv2.COLOR_RGB2BGR)
+                )
+
+        # Process images and add text to bubbles
+        return [
+            Image.fromarray(image)
+            for image in add_text_to_bubbles(empty_images, masks, texts)
+        ]
 
     eyes = Eyes()
     images = [
