@@ -68,6 +68,10 @@ class GroqBrainUI(UI):
                                 "enum": ["anime", "realistic"],
                                 "description": "The style to generate our image in.",
                             },
+                            "dialog": {
+                                "type": "string",
+                                "description": "If a character is saying something in the scene, this is her dialog.",
+                            },
                         },
                         "required": ["prompt", "danbooru", "genders"],
                     },
