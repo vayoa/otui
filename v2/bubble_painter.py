@@ -1,4 +1,5 @@
 import os
+import re
 import textwrap
 import cv2
 import numpy as np
@@ -131,6 +132,36 @@ def draw_text_on_bubble(
         y_offset += text_size[1] + 5
 
 
+# Helper function to split text on newlines, periods, or commas
+def split_text_for_bubbles(text: str, max_bubbles: int) -> List[str]:
+    # Split on newlines first
+    split_text = text.splitlines()
+    if len(split_text) >= max_bubbles:
+        return split_text
+
+    # If there are fewer lines than bubbles, split further on periods and commas
+    further_split = re.split(r"[.,]", text)
+    further_split = [line.strip() for line in further_split if line.strip()]
+
+    # Distribute text to match the number of bubbles
+    if len(further_split) >= max_bubbles:
+        return further_split
+
+    # Otherwise, group remaining lines if they are still fewer than bubbles
+    grouped_text = []
+    line_buffer = ""
+    for line in further_split:
+        if len(grouped_text) + 1 < max_bubbles:
+            grouped_text.append(line)
+        else:
+            # Combine the remaining lines if less than bubbles are available
+            line_buffer += f"{line} "
+    if line_buffer:
+        grouped_text.append(line_buffer.strip())
+
+    return grouped_text
+
+
 # Main function to process images with empty bubbles and masks
 def add_text_to_bubbles(
     empty_images: list[np.ndarray] | list[str],
@@ -174,7 +205,7 @@ def add_text_to_bubbles(
             )
 
             # Split text across bubbles
-            new_lines = new_text.split("\n")
+            new_lines = split_text_for_bubbles(new_text, len(filtered_boxes))
             bubbles_count = len(filtered_boxes)
             lines_per_bubble = len(new_lines) // bubbles_count
             extra_lines = len(new_lines) % bubbles_count
@@ -261,17 +292,22 @@ if __name__ == "__main__":
     from rich import print
 
     eyes = Eyes()
-    images = ["./images/image1.png", "./images/image2.png"]
+    images = [
+        "./images/image1.png",
+        "./images/image1.png",
+        "./images/image2.png",
+    ]
     processed_images = add_dialog(
         eyes,
         [Image.open(url) for url in images],
         [
             "Text for the first image bubble.\nThis is some longggggg text\nMake sure you have it all",
+            "Hey, this is another test!",
             "Hello!",
         ],
     )
 
     # Save or display the results
-    for img, filename in zip(processed_images, images):
-        result_path = f"./images/result-{os.path.basename(filename)}"
+    for i, (img, filename) in enumerate(zip(processed_images, images)):
+        result_path = f"./images/result-{os.path.basename(filename)}-{i}.png"
         img.save(result_path)
