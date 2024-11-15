@@ -121,6 +121,10 @@ class GroqBrainUI(UI):
         self.gui_thread.start()
         time.sleep(1)
 
+    def on_close(self):
+        self.preview_window.eyes.close()
+        super().on_close()
+
     def set_layout(self, layout: Literal["init", "side", "game"]):
         preview_window = gw.getWindowsWithTitle(self.preview_window.window_title)[0]
         if preview_window is not None:

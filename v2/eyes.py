@@ -32,18 +32,16 @@ class Eyes:
         self.characters = characters
         self.lcm = lcm
         self.client_id = str(uuid.uuid4())
-
-        self.connected = False
+        self.ws = websocket.WebSocket()
 
     def _connect(self):
-        if not self.connected:
-            self.ws = websocket.WebSocket()
+        if not self.ws.connected:
             self.ws.connect(
                 "ws://{}/ws?clientId={}".format(self.server_address, self.client_id)
             )
 
     def close(self):
-        if self.connected:
+        if self.ws.connected:
             self.ws.close()
 
     def add_character(self, name, img, prompt):
@@ -159,7 +157,6 @@ class Eyes:
                     images_output.append(PIL.Image.open(io.BytesIO(out[8:])))
                     output_images[current_node] = images_output
                     yield output_images
-        self.close()
 
     def generate(
         self,

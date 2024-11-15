@@ -66,6 +66,8 @@ class ImageUpdater(QObject):
         # Reset the stop event for the new thread
         self.stop_event.clear()
 
+        self.eyes._connect()
+
         # Start a new preview thread
         self.preview_thread = threading.Thread(
             target=lambda: self.generate_images(

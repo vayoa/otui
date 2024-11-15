@@ -250,6 +250,8 @@ class UI:
                 self.window.resizeTo(1089, 180)
                 self.window.moveTo(422, 845)
 
+    def on_close(self): ...
+
     def handle_params(self, params) -> bool:
         return False
 
@@ -269,6 +271,7 @@ class UI:
                 or user_input.strip().startswith("~exit")
             ):
                 self.set_layout("init")
+                self.on_close()
                 break
 
             params = [p.lower().strip() for p in user_input.strip().split("~")]
