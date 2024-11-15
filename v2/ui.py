@@ -31,11 +31,19 @@ from langchain_community.chat_models import ChatOllama
 import ollama_brains as ollama_brains
 import pygetwindow as gw
 
+COMMANDS_TYPE = dict[
+    str,
+    str
+    | dict[str, TypedDict("COMMAND_META", {"meta": str, "commands": dict[str, str]})],
+]
+
 
 class Prompter:
     class CommandCompleter(Completer):
         def __init__(
-            self, characters, commands: Optional[dict[str, str | dict[str, Any]]] = None
+            self,
+            characters,
+            extra_commands: COMMANDS_TYPE = {},
         ):
             characters = {
                 name: (
@@ -46,12 +54,12 @@ class Prompter:
                 for name, character in characters.items()
             }
 
-            self.commands = commands or {
+            self.commands = {
                 "bye | quit | exit": "quit",
                 "hijack": "hijack",
                 "auto-hijack | ah": "toggle auto-hijack mode",
-                # "show | s": "generates a picture",
-                "auto-show | as": "toggle auto-show mode (generates a picture for every response)",
+                "show | s": "generates a picture",
+                # "auto-show | as": "toggle auto-show mode (generates a picture for every response)",
                 "messages | m": "shows the current message history",
                 "layout | ly": {
                     "meta": "change the layout of the program",
@@ -61,7 +69,6 @@ class Prompter:
                         "game": "a game-like layout",
                     },
                 },
-                "dialog | d": "toggle dialog in images",
             }
 
             self.commands = {
@@ -70,6 +77,7 @@ class Prompter:
                     "meta": "shows all seen characters or describes a specific one",
                     "commands": characters,
                 },
+                **extra_commands,
             }
 
             self.characters = characters
@@ -131,8 +139,15 @@ class Prompter:
             text = document.text
             yield from self.complete(text, self.commands, "~")
 
-    def __init__(self):
+    def __init__(self, extra_commands={}):
         self.prompt_session = PromptSession()
+        self.extra_commands = extra_commands
+
+    def add_commands(self, commands: COMMANDS_TYPE):
+        self.extra_commands = self.extra_commands | commands
+
+    def remove_command(self, key: str):
+        self.extra_commands.pop(key)
 
     def user_prompt(self, default=""):
         kb = KeyBindings()
@@ -155,7 +170,9 @@ class Prompter:
             wrap_lines=True,
             default=default,
             prompt_continuation=prompt_continuation,
-            completer=Prompter.CommandCompleter(characters={}),
+            completer=Prompter.CommandCompleter(
+                characters={}, extra_commands=self.extra_commands
+            ),
             complete_while_typing=True,
         )
 

@@ -82,6 +82,7 @@ class GroqBrainUI(UI):
     )
     initial_preview_pos: Optional[tuple[int, int]] = field(init=False, default=None)
     initial_preview_size: Optional[tuple[int, int]] = field(init=False, default=None)
+    nsfw: bool = True
 
     def __post_init__(self):
         self.brain = GroqBrain(
@@ -102,6 +103,10 @@ class GroqBrainUI(UI):
             tool.get("function", {}).get("name")
             for tool in self.brain.default_tools or {}
         ) == set(self.functions.keys())
+
+        self.prompter.add_commands(
+            {"dialog | d": "toggle dialog in images", "nsfw": "toggle nsfw mode"}
+        )
 
         terminal = gw.getActiveWindow()
         assert terminal is not None
@@ -176,6 +181,22 @@ class GroqBrainUI(UI):
                 f"[orange bold]Dialog in images is now [italic]{'[bold red]OFF[/]' if on else '[bold green]ON[/]'}."
             )
             return True
+        nsfw_param = params.get("nsfw")
+        if nsfw_param is not None:
+            self.nsfw = not self.nsfw
+            self.brain.messages[0] = ChatCompletionSystemMessageParam(
+                role="system",
+                content=self.system
+                + (
+                    ""
+                    if self.nsfw
+                    else "\nYou cannot whatsoever generate NSFW/Pornographic responses, you'll refuse to do so"
+                ),
+            )
+            self.print(
+                f"[orange bold]NSFW mode is now [italic]{'[bold green]ON[/]' if self.nsfw else '[bold red]OFF[/]'}."
+            )
+            return True
         return False
 
     def generate_scene_image(
@@ -210,7 +231,7 @@ class GroqBrainUI(UI):
             dimensions = (1152, 896)
             self.preview_window.preview(
                 f"score_9, score_8_up, score_7_up, {prompt}",
-                negative="score_6, score_5, score_4, censored",
+                negative=f"score_6, score_5, score_4, {'censored' if self.nsfw else '(uncensored, nsfw, nude, porn, hentai:1.2)'}",
                 dimensions=dimensions,
                 steps=25,
                 sampler_name="dpmpp_2m_sde_gpu",
