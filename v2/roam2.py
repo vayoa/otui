@@ -57,7 +57,7 @@ class GroqBrainUI(UI):
                             },
                             "danbooru": {
                                 "type": "string",
-                                "description": "A long and detailed list of danbooru tags for the scene (stable diffusion (sdxl) prompt), focusing on 3 characters at max. ",
+                                "description": "A long and detailed list of danbooru tags for the scene delimited with commas (stable diffusion (sdxl) prompt), focusing on 3 characters at max. ",
                             },
                             "genders": {
                                 "type": "string",

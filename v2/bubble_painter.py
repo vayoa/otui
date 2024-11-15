@@ -131,42 +131,52 @@ def draw_text_on_bubble(
         y_offset += text_size[1] + 5
 
 
-# Helper function to split text on newlines, periods, commas, ?, or !
+# Helper function to split text on newlines, periods, commas, ?, or ! while preserving ellipses
 def split_text_for_bubbles(text: str, max_bubbles: int) -> List[str]:
     # Split on newlines first
     split_text = text.splitlines()
     if len(split_text) >= max_bubbles:
         return split_text
 
-    # If there are fewer lines than bubbles, split further on ., ,, ?, and !
-    further_split = re.split(r"([.,?!])", text)
-    combined_split = []
+    # Only split further if there are not enough newline-separated segments
+    further_split = []
+    if len(split_text) < max_bubbles:
+        # Use a regex to split while retaining ?, !, ..., ...!, ...?, etc.
+        further_split = re.split(r"(\.\.\.|\.{3}[!?]|\.{3}\?|\.{2}\?|[.,?!])", text)
+        combined_split = []
 
-    # Only preserve ? and ! while combining segments
-    temp = ""
-    for part in further_split:
-        if part.strip() in {"?", "!"}:  # Preserve these delimiters
-            temp += part  # Append the delimiter to the preceding text
-        elif part.strip() in {".", ","}:  # Split but discard these delimiters
-            if temp:
-                combined_split.append(temp.strip())
-                temp = ""
-        else:
-            if temp:
-                combined_split.append(temp.strip())
-            temp = part  # Start a new segment
+        # Combine segments, preserving ellipses and certain delimiters
+        temp = ""
+        for part in further_split:
+            if part.strip() in {
+                "?",
+                "!",
+                "...",
+                "...!",
+                "...?",
+                "..?",
+            }:  # Preserve these delimiters
+                temp += part  # Append the delimiter to the preceding text
+            elif part.strip() in {".", ","}:  # Split but discard these delimiters
+                if temp:
+                    combined_split.append(temp.strip())
+                    temp = ""
+            else:
+                if temp:
+                    combined_split.append(temp.strip())
+                temp = part  # Start a new segment
 
-    if temp:  # Add the last accumulated segment, if any
-        combined_split.append(temp.strip())
+        if temp:  # Add the last accumulated segment, if any
+            combined_split.append(temp.strip())
 
-    # Distribute text to match the number of bubbles
-    if len(combined_split) >= max_bubbles:
-        return combined_split
+        # If the split segments are enough to meet max_bubbles, return them
+        if len(combined_split) >= max_bubbles:
+            return combined_split
 
     # Otherwise, group remaining lines if they are still fewer than bubbles
     grouped_text = []
     line_buffer = ""
-    for line in combined_split:
+    for line in split_text if not further_split else combined_split:
         if len(grouped_text) + 1 < max_bubbles:
             grouped_text.append(line)
         else:
@@ -319,6 +329,7 @@ if __name__ == "__main__":
         "./images/image1.png",
         "./images/image1.png",
         "./images/image1.png",
+        "./images/image1.png",
         "./images/image2.png",
     ]
     processed_images = add_dialog(
@@ -328,6 +339,7 @@ if __name__ == "__main__":
             "Text for the first image bubble.\nThis is some longggggg text\nMake sure you have it all",
             "Hey, this is another test!",
             "Are we sure this works? Seems like it does!",
+            "Are we really really sure..? Seems like... it does...!",
             "Hello!",
         ],
     )
