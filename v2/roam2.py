@@ -47,7 +47,7 @@ class GroqBrainUI(UI):
             {
                 "function": {
                     "name": "generate_scene_image",
-                    "description": "Function used to generate an image based on a text prompt using stable diffusion.",
+                    "description": "Function used to generate an image based on a text prompt using stable diffusion. Does not 'remember' previous prompts, so treat each prompt as if you've never prompted it before.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -206,7 +206,7 @@ class GroqBrainUI(UI):
 
         prompt = f"{prompt}, {danbooru}, {genders}"
         if dialog and "speech_bubble" not in prompt and "speech bubble" not in prompt:
-            prompt += ", speech_bubble"
+            prompt += ", speech bubble"
 
         prompt_mk = Markdown("> " + prompt.replace("\n", "\n> "))
 
