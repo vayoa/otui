@@ -58,6 +58,7 @@ class Eyes:
         steps=None,
         sampler_name=None,
         cfg=None,
+        clip_skip=None,
         dialog=False,
     ):
 
@@ -65,14 +66,16 @@ class Eyes:
         negative = negative or self.default_negative_prompt
         dimensions = dimensions or self.default_dimensions
         checkpoint = checkpoint or self.default_checkpoint
+        clip_skip = clip_skip or -1
 
         cl = CheckpointLoaderSimple(ckpt_name=checkpoint)
         l = EmptyLatentImage(width=dimensions[0], height=dimensions[1])
+        cs = CLIPSetLastLayer(cl.outputs["CLIP"], clip_skip)
         pos = CLIPTextEncode(
-            clip=cl.outputs["CLIP"],
+            clip=cs.outputs["CLIP"],
             text=positive,
         )
-        neg = CLIPTextEncode(clip=cl.outputs["CLIP"], text=negative)
+        neg = CLIPTextEncode(clip=cs.outputs["CLIP"], text=negative)
         ks = KSampler(
             model=cl.outputs["MODEL"],
             positive=pos.outputs["CONDITIONING"],
@@ -85,7 +88,7 @@ class Eyes:
         )
         vaed = VAEDecode(samples=ks.outputs["LATENT"], vae=cl.outputs["VAE"])
 
-        nodes = [cl, l, pos, neg, ks, vaed]
+        nodes = [cl, cs, l, pos, neg, ks, vaed]
 
         if lcm:
             ll = LoraLoader(model=cl.outputs["MODEL"], clip=cl.outputs["CLIP"])
@@ -169,6 +172,7 @@ class Eyes:
         steps=None,
         sampler_name=None,
         cfg=None,
+        clip_skip=None,
     ) -> tuple[Image, dict[str, list[Image]]] | tuple[None, None]:
         results = list(
             self.get_images(
@@ -182,6 +186,7 @@ class Eyes:
                     steps=steps,
                     sampler_name=sampler_name,
                     cfg=cfg,
+                    cs=clip_skip,
                 )
             )
         )[-1]
@@ -202,6 +207,7 @@ class Eyes:
         steps=None,
         sampler_name=None,
         cfg=None,
+        clip_skip=None,
         dialog=None,
     ) -> Generator[tuple[Image | None, dict[str, list[Image]] | None], None, None]:
         for result in self.get_images(
@@ -215,6 +221,7 @@ class Eyes:
                 steps=steps,
                 sampler_name=sampler_name,
                 cfg=cfg,
+                clip_skip=clip_skip,
                 dialog=bool(dialog),
             )
         ):

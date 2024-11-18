@@ -269,6 +269,12 @@ class ImageCompositeMasked(Node[O("ImageCompositeMasked", {"IMAGE": IMAGE})]):
     resize_source: bool = False
 
 
+@dataclass
+class CLIPSetLastLayer(Node[O("CLIP Set Last Layer", {"CLIP": CLIP})]):
+    clip: CLIP
+    stop_at_clip_layer: int = -1
+
+
 if __name__ == "__main__":
     from rich import print
 

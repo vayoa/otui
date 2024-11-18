@@ -49,6 +49,7 @@ class ImageUpdater(QObject):
         steps=None,
         sampler_name=None,
         cfg=None,
+        clip_skip=None,
         dialog=None,
     ):
         # If the window is hidden, show it
@@ -80,6 +81,7 @@ class ImageUpdater(QObject):
                 steps=steps,
                 sampler_name=sampler_name,
                 cfg=cfg,
+                clip_skip=clip_skip,
                 dialog=dialog,
             ),
             daemon=True,
@@ -125,6 +127,7 @@ class ImageUpdater(QObject):
         steps=None,
         sampler_name=None,
         cfg=None,
+        clip_skip=None,
         dialog=None,
     ):
         for i, (_, previews) in enumerate(
@@ -138,6 +141,7 @@ class ImageUpdater(QObject):
                 steps=steps,
                 sampler_name=sampler_name,
                 cfg=cfg,
+                clip_skip=clip_skip,
                 dialog=dialog,
             )
         ):  # Simulate 3 preview images

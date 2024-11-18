@@ -240,6 +240,8 @@ class GroqBrainUI(UI):
                     if style == "realistic"
                     else None
                 ),
+                cfg=7,
+                clip_skip=-2,
                 dialog=dialog,
             )
             time.sleep(2)
