@@ -95,7 +95,7 @@ def args(**kwargs) -> argparse.Namespace:
         "--ly",
         action="store",
         default="init",
-        choices=["init", "side", "game"],
+        choices=["init", "side", "game", "console"],
         help="The layout to launch with",
     )
 

@@ -130,7 +130,7 @@ class GroqBrainUI(UI):
         self.preview_window.eyes.close()
         super().on_close()
 
-    def set_layout(self, layout: Literal["init", "side", "game"]):
+    def set_layout(self, layout: Literal["init", "side", "game", "console"]):
         preview_window = gw.getWindowsWithTitle(self.preview_window.window_title)[0]
         if preview_window is not None:
             if self.initial_preview_pos is None or self.initial_preview_size is None:
@@ -158,6 +158,9 @@ class GroqBrainUI(UI):
                 case "game":
                     preview_window.resizeTo(1818, 930)
                     preview_window.moveTo(51, 30)
+                case "console":
+                    preview_window.resizeTo(1700, 830)
+                    preview_window.moveTo(111, 10)
         super().set_layout(layout)
 
     def handle_params(self, params) -> bool:

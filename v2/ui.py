@@ -67,6 +67,7 @@ class Prompter:
                         "init": "the initial layout the program was launched at",
                         "side": "a side-view layout",
                         "game": "a game-like layout",
+                        "console": "a console-like layout",
                     },
                 },
             }
@@ -254,7 +255,7 @@ class UI:
         if self.live is not None:
             self.live.update(Markdown(content))
 
-    def set_layout(self, layout: Literal["init", "side", "game"]):
+    def set_layout(self, layout: Literal["init", "side", "game", "console"]):
         self.layout = layout
         match layout:
             case "init":
@@ -264,6 +265,9 @@ class UI:
                 self.window.resizeTo(*self.org_win_size)
                 self.window.moveTo(51, self.org_win_pos[1])
             case "game":
+                self.window.resizeTo(1089, 180)
+                self.window.moveTo(422, 845)
+            case "console":
                 self.window.resizeTo(1089, 180)
                 self.window.moveTo(422, 845)
 
