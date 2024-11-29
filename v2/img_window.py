@@ -62,6 +62,7 @@ class ImageUpdater(QObject):
         # Signal the previous thread to stop
         if self.preview_thread and self.preview_thread.is_alive():
             self.stop_event.set()  # Signal the thread to stop
+            self.eyes.interrupt()  # Interrupt the generation
             self.preview_thread.join()  # Wait for it to finish
 
         # Reset the stop event for the new thread
@@ -144,7 +145,7 @@ class ImageUpdater(QObject):
                 clip_skip=clip_skip,
                 dialog=dialog,
             )
-        ):  # Simulate 3 preview images
+        ):
             if self.stop_event.is_set():  # Check if we should stop
                 return  # Exit the thread if stopping
 

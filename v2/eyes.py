@@ -186,7 +186,7 @@ class Eyes:
                     steps=steps,
                     sampler_name=sampler_name,
                     cfg=cfg,
-                    cs=clip_skip,
+                    clip_skip=clip_skip,
                 )
             )
         )[-1]
@@ -261,6 +261,9 @@ class Eyes:
         return f"[yellow link={img_dir}]show ({img_name})[/]", self.pixelize(
             img, ratio=ratio
         )
+
+    def interrupt(self):
+        urllib.request.urlopen(f"http://{self.server_address}/interrupt", data=b"{}")
 
 
 if __name__ == "__main__":
