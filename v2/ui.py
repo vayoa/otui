@@ -328,7 +328,7 @@ class UI:
             if layout_param is not None and not user_input.strip(user_input):
                 if layout_param:
                     name = layout_param.strip()
-                    options = ["init", "side", "game"]
+                    options = ["init", "side", "game", "console"]
                     if name in options:
                         self.set_layout(name)  # type: ignore
                         self.print(f"[orange bold]Changed layout to [italic]{name}.")
