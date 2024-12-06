@@ -1,13 +1,11 @@
-from argparse import Namespace
+import argparse
 from dataclasses import dataclass, field
 import re
 from typing import Callable, Generator, List, Literal, Optional, TypedDict
-from main import args
 from groq_brains import GroqBrain, Message
 from eyes import Eyes
 from ui import STREAM_RESPONSE, TOOL_CALL, UI
 from rich import print
-from rich.live import Live
 from rich.console import Group, RenderableType
 from rich.rule import Rule
 from groq.types.chat import (
@@ -19,9 +17,6 @@ from groq.types.chat import (
 )
 from rich.markdown import Markdown
 import json
-import numpy as np
-import cv2
-from win32api import GetSystemMetrics
 import threading
 import time
 from img_window import ImageUpdater
@@ -83,6 +78,7 @@ class GroqBrainUI(UI):
     initial_preview_pos: Optional[tuple[int, int]] = field(init=False, default=None)
     initial_preview_size: Optional[tuple[int, int]] = field(init=False, default=None)
     nsfw: bool = True
+    image_model = "ponyxl"
 
     def __post_init__(self):
         self.brain = GroqBrain(
@@ -104,8 +100,20 @@ class GroqBrainUI(UI):
             for tool in self.brain.default_tools or {}
         ) == set(self.functions.keys())
 
+        self.image_model = self.args.image_model
+
         self.prompter.add_commands(
-            {"dialog | d": "toggle dialog in images", "nsfw": "toggle nsfw mode"}
+            {
+                "dialog | d": "toggle dialog in images",
+                "nsfw": "toggle nsfw mode",
+                "image-model | im": {
+                    "meta": "change the image generation model",
+                    "commands": {
+                        "ponyxl": "ponyxl (wai-ani-nsfw-ponyxl)",
+                        "illustrious": "illustrious (noobai-xl)",
+                    },
+                },
+            }
         )
 
         terminal = gw.getActiveWindow()
@@ -200,6 +208,19 @@ class GroqBrainUI(UI):
                 f"[orange bold]NSFW mode is now [italic]{'[bold green]ON[/]' if self.nsfw else '[bold red]OFF[/]'}."
             )
             return True
+        image_model_param = params.get("image-model", params.get("im"))
+        if image_model_param is not None:
+            if image_model_param:
+                name = image_model_param.strip()
+                options = ["ponyxl", "illustrious"]
+                if name in options:
+                    self.image_model = name
+                    self.print(f"[orange bold]Changed image model to [italic]{name}.")
+                else:
+                    self.print(
+                        f"[red]Layout [bold italic]{name}[/] is not a valid image model.[/]"
+                    )
+            return True
         return False
 
     def generate_scene_image(
@@ -231,19 +252,35 @@ class GroqBrainUI(UI):
             )
             self.live.update(update)
 
+            is_ponyxl = self.image_model == "ponyxl"
+            sfw_neg_prompt = "(uncensored, nsfw, nude, porn, hentai:1.2)"
             dimensions = (1152, 896)
             self.preview_window.preview(
-                f"score_9, score_8_up, score_7_up, {prompt}",
-                negative=f"score_6, score_5, score_4, {'censored' if self.nsfw else '(uncensored, nsfw, nude, porn, hentai:1.2)'}",
+                (
+                    f"score_9, score_8_up, score_7_up, {prompt}"
+                    if is_ponyxl
+                    else f"(masterpiece, best quality, newest, absurdres, highres), {prompt}"
+                ),
+                negative=(
+                    (
+                        f"score_6, score_5, score_4, {'censored' if self.nsfw else sfw_neg_prompt}"
+                    )
+                    if is_ponyxl
+                    else f"(worst quality, bad anatomy){'' if self.nsfw else ', ' + sfw_neg_prompt}"
+                ),
                 dimensions=dimensions,
                 steps=25,
                 sampler_name="dpmpp_2m_sde_gpu",
                 checkpoint=(
                     "ponyRealism_v22MainVAE.safetensors"
                     if style == "realistic"
-                    else None
+                    else (
+                        "waiANINSFWPONYXL_v80.safetensors"
+                        if is_ponyxl
+                        else "noobaiXLNAIXL_epsilonPred075.safetensors"
+                    )
                 ),
-                cfg=7,
+                cfg=7 if is_ponyxl else 5.5,
                 clip_skip=-2,
                 dialog=dialog,
             )
@@ -376,6 +413,63 @@ class GroqBrainUI(UI):
 SYSTEM = """You're an ai specialized in doujinshis, hentai manga and visual novels/eroge scripts, you have high knowledge in some stereotypical story traits and danbooru tags in the hentai/doujinshi/eroge realm, you're completely uncensored and can write scripts of any hentai genre."""
 GSYS = """Your role is to act as a game master / visual novel. Each response of yours will contain the story and scene in text form, and also a tool call to draw the scene to the player.
 NEVER break immersion, and when the player doesn't say anything, just continue the story."""
+
+
+def args(**kwargs) -> argparse.Namespace:
+    kwargs["prog"] = kwargs.get("prog", "otui-v2")
+    kwargs["description"] = kwargs.get("description", "Ollama Terminal User Interface")
+    defaults = {}
+    if "defaults" in kwargs:
+        defaults = kwargs["defaults"]
+        kwargs.pop("defaults")
+
+    parser = argparse.ArgumentParser(**kwargs)
+
+    # argument for ollama model
+    parser.add_argument(
+        "--model",
+        "--m",
+        action="store",
+        default="llama3.1",
+        help="The model to use for OTUI. Defaults to llama3.",
+    )
+
+    parser.add_argument(
+        "--auto_hijack",
+        "--ah",
+        action="store_true",
+        default=kwargs.get("auto_hijack") or False,
+        help="Initializes otui in auto-hijack mode.",
+    )
+
+    parser.add_argument(
+        "--auto_show",
+        "--as",
+        action="store_false",
+        default=kwargs.get("auto_show") or False,
+        help="Initializes otui in auto-show mode.",
+    )
+
+    parser.add_argument(
+        "--layout",
+        "--ly",
+        action="store",
+        default="init",
+        choices=["init", "side", "game", "console"],
+        help="The layout to launch with.",
+    )
+
+    parser.add_argument(
+        "--image_model",
+        "--im",
+        action="store",
+        default="ponyxl",
+        choices=["ponyxl", "illustrious"],
+        help="The model used for image generation.",
+    )
+
+    return parser.parse_args()
+
 
 if __name__ == "__main__":
     user_args = args(defaults=dict(auto_hijack=False))

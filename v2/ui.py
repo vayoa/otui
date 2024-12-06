@@ -31,10 +31,15 @@ from langchain_community.chat_models import ChatOllama
 import ollama_brains as ollama_brains
 import pygetwindow as gw
 
+
+class COMMAND_META(TypedDict):
+    meta: str
+    commands: dict[str, str]
+
+
 COMMANDS_TYPE = dict[
     str,
-    str
-    | dict[str, TypedDict("COMMAND_META", {"meta": str, "commands": dict[str, str]})],
+    str | COMMAND_META,
 ]
 
 
