@@ -31,7 +31,7 @@ Message = ChatCompletionMessageParam
 
 @dataclass
 class GroqBrain(Brain[Message, ChatCompletionToolParam]):
-    model: str = "llama-3.1-70b-versatile"
+    model: str = "llama-3.3-70b-versatile"
     client: Groq = field(
         init=False,
         default_factory=lambda: Groq(

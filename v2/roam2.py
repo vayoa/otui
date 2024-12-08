@@ -79,6 +79,7 @@ class GroqBrainUI(UI):
     initial_preview_size: Optional[tuple[int, int]] = field(init=False, default=None)
     nsfw: bool = True
     image_model = "ponyxl"
+    game_mode = False
 
     def __post_init__(self):
         self.brain = GroqBrain(
@@ -102,6 +103,10 @@ class GroqBrainUI(UI):
 
         self.image_model = self.args.image_model
 
+        self.game_mode = self.args.game
+        if self.game_mode:
+            self.change_system(self.system + "\n" + GSYS)
+
         self.prompter.add_commands(
             {
                 "dialog | d": "toggle dialog in images",
@@ -113,6 +118,7 @@ class GroqBrainUI(UI):
                         "illustrious": "illustrious (noobai-xl)",
                     },
                 },
+                "game | g": "toggle game mode",
             }
         )
 
@@ -171,6 +177,11 @@ class GroqBrainUI(UI):
                     preview_window.moveTo(111, 10)
         super().set_layout(layout)
 
+    def change_system(self, content):
+        self.brain.messages[0] = ChatCompletionSystemMessageParam(
+            role="system", content=content
+        )
+
     def handle_params(self, params) -> bool:
         dialog_param = params.get("dialog", params.get("d"))
         if dialog_param is not None:
@@ -195,14 +206,13 @@ class GroqBrainUI(UI):
         nsfw_param = params.get("nsfw")
         if nsfw_param is not None:
             self.nsfw = not self.nsfw
-            self.brain.messages[0] = ChatCompletionSystemMessageParam(
-                role="system",
-                content=self.system
+            self.change_system(
+                self.system
                 + (
                     ""
                     if self.nsfw
                     else "\nYou cannot whatsoever generate NSFW/Pornographic responses, you'll refuse to do so"
-                ),
+                )
             )
             self.print(
                 f"[orange bold]NSFW mode is now [italic]{'[bold green]ON[/]' if self.nsfw else '[bold red]OFF[/]'}."
@@ -220,6 +230,17 @@ class GroqBrainUI(UI):
                     self.print(
                         f"[red]Layout [bold italic]{name}[/] is not a valid image model.[/]"
                     )
+            return True
+        game_mode_param = params.get("game", params.get("g"))
+        if game_mode_param is not None:
+            if self.game_mode:
+                self.change_system(self.system)
+            else:
+                self.change_system(self.system + "\n" + GSYS)
+            self.game_mode = not self.game_mode
+            self.print(
+                f"[orange bold]Game mode is now [italic]{'[bold green]ON[/]' if self.game_mode else '[bold red]OFF[/]'}."
+            )
             return True
         return False
 
@@ -468,6 +489,14 @@ def args(**kwargs) -> argparse.Namespace:
         help="The model used for image generation.",
     )
 
+    parser.add_argument(
+        "--game",
+        "--g",
+        action="store_true",
+        default=kwargs.get("game") or False,
+        help="Initializes otui in game mode.",
+    )
+
     return parser.parse_args()
 
 
@@ -475,6 +504,6 @@ if __name__ == "__main__":
     user_args = args(defaults=dict(auto_hijack=False))
     ui = GroqBrainUI(
         user_args,
-        system=f"{SYSTEM}",
+        system=SYSTEM,
     )
     ui.run()
