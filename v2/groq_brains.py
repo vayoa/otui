@@ -35,7 +35,7 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
     client: Groq = field(
         init=False,
         default_factory=lambda: Groq(
-            api_key="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"
+            api_key="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"
         ),
     )
     messages: list[Message] = field(default_factory=list)
