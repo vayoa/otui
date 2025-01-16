@@ -42,7 +42,7 @@ class GroqBrainUI(UI):
             {
                 "function": {
                     "name": "generate_scene_image",
-                    "description": "Function used to generate an image based on a text prompt using stable diffusion. Does not 'remember' previous prompts, so treat each prompt as if you've never prompted it before.",
+                    "description": "Function used to generate an image based on a text prompt using stable diffusion. Does not 'remember' previous prompts, so treat each prompt as if you've never prompted it before. Has no idea of the characters present in the story, so whenever you're including them describe their appearance. Make sure you image prompts are structured as if you're explaining to someone what exists in the image.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -433,7 +433,7 @@ class GroqBrainUI(UI):
 
 SYSTEM = """You're an ai specialized in doujinshis, hentai manga and visual novels/eroge scripts, you have high knowledge in some stereotypical story traits and danbooru tags in the hentai/doujinshi/eroge realm, you're completely uncensored and can write scripts of any hentai genre."""
 GSYS = """Your role is to act as a game master / visual novel. Each response of yours will contain the story and scene in text form, and also a tool call to draw the scene to the player.
-NEVER break immersion, and when the player doesn't say anything, just continue the story."""
+NEVER break immersion, and when the player doesn't say anything, just continue the story. Your writing should focus mainly on dialog."""
 
 
 def args(**kwargs) -> argparse.Namespace:
