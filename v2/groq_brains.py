@@ -83,26 +83,14 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
         model = model or self.model
         messages = messages or self.messages
 
-        try:
-            return self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                stream=stream,  # type: ignore
-                temperature=1,
-                max_tokens=1024,
-                top_p=1,
-                stop=None,
-                tools=tools,
-                tool_choice="auto",
-            )
-        except APIError as e:
-            print(e)
-            return self.chat(
-                input=input,
-                model=model,
-                messages=messages,
-                stream=stream,  # type: ignore
-                format=format,
-                keep_alive=keep_alive,
-                tools=tools,
-            )  # type: ignore
+        return self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            stream=stream,  # type: ignore
+            temperature=1,
+            max_tokens=1024,
+            top_p=1,
+            stop=None,
+            tools=tools,
+            tool_choice="auto",
+        )
