@@ -21,6 +21,7 @@ import threading
 import time
 from img_window import ImageUpdater
 import pygetwindow as gw
+from groq._exceptions import APIError as GroqAPIError
 
 
 class ToolFunctions(TypedDict):
@@ -388,18 +389,35 @@ class GroqBrainUI(UI):
             input_messages.append({"role": "assistant", "content": ai})
             ai_input = ai
 
-        for i, chunk in enumerate(
-            self.brain.chat(input=input_messages, tools=self.tools, stream=True)
-        ):
-            delta = chunk.choices[0].delta
+        try:
+            for i, chunk in enumerate(
+                self.brain.chat(input=input_messages, tools=self.tools, stream=True)
+            ):
+                delta = chunk.choices[0].delta
 
-            chunk = (ai_input if i == 0 else "") + (delta.content or "")
-            content += chunk
-            _t = self.handle_tools(delta)
-            result = None
-            if _t is not None:
-                result, tool_call_m, tool_use_m = _t
-            yield (chunk, content, result)
+                chunk = (ai_input if i == 0 else "") + (delta.content or "")
+                content += chunk
+                _t = self.handle_tools(delta)
+                result = None
+                if _t is not None:
+                    result, tool_call_m, tool_use_m = _t
+                yield (chunk, content, result)
+        except GroqAPIError as e:
+            self.console.print(
+                "[red bold]TOOL USE FAILED... [blue italic] Trying again..."
+            )
+
+            if "failed_generation" in str(e):
+                if content:
+                    self.brain.messages.append(
+                        {"role": "assistant", "content": content}
+                    )
+                yield from self.stream(
+                    "Your image tool failed for some reason, reply only with a retry tool call.",
+                    ai=None,
+                )
+                self.brain.clear_last_messages(3, keep=2)
+                return
 
         if ai:
             self.brain.clear_last_messages(1)
