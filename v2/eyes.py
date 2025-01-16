@@ -60,6 +60,7 @@ class Eyes:
         cfg=None,
         clip_skip=None,
         dialog=False,
+        face_detailer=False,
     ):
 
         lcm = lcm if lcm is not None else self.lcm
@@ -120,14 +121,35 @@ class Eyes:
 
             nodes += [ipaml, cvl, ipaifl, ci, ipafi]
 
+        output_image = vaed.outputs["IMAGE"]
+
+        if face_detailer:
+            ult = UltralyticsDetectorProvider()
+            samimp = SAMLoaderImpact()
+            size = dimensions[0] * dimensions[1]
+            face = FaceDetailer(
+                image=vaed.outputs["IMAGE"],
+                model=cl.outputs["MODEL"],
+                clip=cl.outputs["CLIP"],
+                vae=cl.outputs["VAE"],
+                positive=pos.outputs["CONDITIONING"],
+                negative=neg.outputs["CONDITIONING"],
+                bbox_detector=ult.outputs["BBOX_DETECTOR"],
+                sam_model_opt=samimp.outputs["SAM_MODEL"],
+                segm_detector_opt=ult.outputs["SEGM_DETECTOR"],
+                steps=8 if size <= 1_032_192 else 10,
+            )
+            nodes += [ult, samimp, face]
+            output_image = face.outputs["IMAGE"]
+
         if dialog:
             return workflow(
-                *nodes, SaveImageWebsocket(images=vaed.outputs["IMAGE"])
-            ) | bubble_painter.clear_bubbles_workflow(vaed.outputs["IMAGE"])
+                *nodes, SaveImageWebsocket(images=output_image)
+            ) | bubble_painter.clear_bubbles_workflow(output_image)
         else:
             return workflow(
                 *nodes,
-                SaveImageWebsocket(images=vaed.outputs["IMAGE"]),
+                SaveImageWebsocket(images=output_image),
             )
 
     def queue_prompt(self, prompt):
@@ -209,6 +231,7 @@ class Eyes:
         cfg=None,
         clip_skip=None,
         dialog=None,
+        face_detailer=None,
     ) -> Generator[tuple[Image | None, dict[str, list[Image]] | None], None, None]:
         for result in self.get_images(
             self.get_workflow(
@@ -223,6 +246,7 @@ class Eyes:
                 cfg=cfg,
                 clip_skip=clip_skip,
                 dialog=bool(dialog),
+                face_detailer=bool(face_detailer),
             )
         ):
             if result is not None:

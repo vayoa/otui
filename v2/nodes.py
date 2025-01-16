@@ -5,6 +5,7 @@ from typing import (
     Dict,
     ForwardRef,
     List,
+    Literal,
     NamedTuple,
     Optional,
     Tuple,
@@ -98,6 +99,8 @@ INSIGHTFACE = NewType("INSIGHTFACE", _Out)
 MASK = NewType("MASK", _Out)
 SAM_MODEL = NewType("SAM_MODEL", _Out)
 GROUNDING_DINO_MODEL = NewType("GROUNDING_DINO_MODEL", _Out)
+BBOX_DETECTOR = NewType("BBOX_DETECTOR", _Out)
+SEGM_DETECTOR = NewType("SEGM_DETECTOR", _Out)
 
 
 @dataclass
@@ -109,8 +112,8 @@ class KSampler(Node[O("KSampler", {"LATENT": LATENT})]):
 
     seed: int
     steps: int = 20
-    cfg: float = 8
-    sampler_name: str = "dpmpp_sde"
+    cfg: float = 7
+    sampler_name: str = "dpmpp_2m_sde_gpu"
     scheduler: str = "karras"
     denoise: float = 1
 
@@ -275,34 +278,117 @@ class CLIPSetLastLayer(Node[O("CLIP Set Last Layer", {"CLIP": CLIP})]):
     stop_at_clip_layer: int = -1
 
 
+@dataclass
+class UltralyticsDetectorProvider(
+    Node[
+        O(
+            "UltralyticsDetectorProvider",
+            {"BBOX_DETECTOR": BBOX_DETECTOR, "SEGM_DETECTOR": SEGM_DETECTOR},
+        )
+    ]
+):
+    model_name: str = "bbox/face_yolov8m.pt"
+
+
+@dataclass
+class SAMLoaderImpact(Node[O("SAMLoader (Impact)", {"SAM_MODEL": SAM_MODEL})]):
+    model_name: str = "sam_vit_b_01ec64.pth"
+    device_mode: Literal["AUTO", "Prefer GPU", "CPU"] = "AUTO"
+    _class_name = "SAMLoader"
+
+
+@dataclass
+class FaceDetailer(Node[O("FaceDetailer", {"IMAGE": IMAGE})]):
+    image: IMAGE
+    model: MODEL
+    clip: CLIP
+    vae: VAE
+    positive: CONDITIONING
+    negative: CONDITIONING
+    bbox_detector: BBOX_DETECTOR
+    sam_model_opt: SAM_MODEL
+    segm_detector_opt: SEGM_DETECTOR
+
+    guide_size: int = 512
+    guide_size_for: bool = True
+    max_size: int = 1024
+    seed: int = 558099804136171
+    steps: int = 10
+    cfg: float = 7
+    sampler_name: str = "dpmpp_2m_sde_gpu"
+    scheduler: str = "karras"
+    denoise: float = 0.5
+    feather: int = 5
+    noise_mask: bool = True
+    force_inpaint: bool = True
+    bbox_threshold: float = 0.5
+    bbox_dilation: int = 10
+    bbox_crop_factor: float = 3
+    sam_detection_hint: str = "center-1"
+    sam_dilation: int = 0
+    sam_threshold: float = 0.93
+    sam_bbox_expansion: int = 0
+    sam_mask_hint_threshold: float = 0.7
+    sam_mask_hint_use_negative: Literal["True", "False"] = "False"
+    drop_size: int = 10
+    wildcard: str = ""
+    cycle: int = 1
+    inpaint_model: bool = False
+    noise_mask_feather: int = 20
+
+    _output_node = True
+
+
 if __name__ == "__main__":
     from rich import print
 
     print(
-        workflow(
-            (cl := CheckpointLoaderSimple()),
-            (l := EmptyLatentImage()),
-            (
-                pos := CLIPTextEncode(
-                    clip=cl.outputs["CLIP"],
-                    text="20 year old mediterranean super model wearing a tight red bikini",
-                )
-            ),
-            (
-                neg := CLIPTextEncode(
-                    clip=cl.outputs["CLIP"], text="artifacts, bad anatomy"
-                )
-            ),
-            (
-                ks := KSampler(
-                    model=cl.outputs["MODEL"],
-                    positive=pos.outputs["CONDITIONING"],
-                    negative=neg.outputs["CONDITIONING"],
-                    latent_image=l.outputs["LATENT"],
-                    seed=1,
-                )
-            ),
-            (vaed := VAEDecode(samples=ks.outputs["LATENT"], vae=cl.outputs["VAE"])),
-            SaveImageWebsocket(images=vaed.outputs["IMAGE"]),
+        json.dumps(
+            workflow(
+                (cl := CheckpointLoaderSimple("ponyRealism_v22MainVAE.safetensors")),
+                (l := EmptyLatentImage()),
+                (
+                    pos := CLIPTextEncode(
+                        clip=cl.outputs["CLIP"],
+                        text="score_9, score_8_up, score_7_up, An italian teenager with long dark blonde hair is standing near a royal roman balcony, she is looking at the camera and wearing a tight tank top and short white tennis skirt, navel",
+                    )
+                ),
+                (
+                    neg := CLIPTextEncode(
+                        clip=cl.outputs["CLIP"], text="score_6, score_5, score_4"
+                    )
+                ),
+                (
+                    ks := KSampler(
+                        model=cl.outputs["MODEL"],
+                        positive=pos.outputs["CONDITIONING"],
+                        negative=neg.outputs["CONDITIONING"],
+                        latent_image=l.outputs["LATENT"],
+                        seed=1,
+                    )
+                ),
+                (
+                    vaed := VAEDecode(
+                        samples=ks.outputs["LATENT"], vae=cl.outputs["VAE"]
+                    )
+                ),
+                SaveImageWebsocket(images=vaed.outputs["IMAGE"]),
+                (ult := UltralyticsDetectorProvider()),
+                (samimp := SAMLoaderImpact()),
+                (
+                    face := FaceDetailer(
+                        image=vaed.outputs["IMAGE"],
+                        model=cl.outputs["MODEL"],
+                        clip=cl.outputs["CLIP"],
+                        vae=cl.outputs["VAE"],
+                        positive=pos.outputs["CONDITIONING"],
+                        negative=neg.outputs["CONDITIONING"],
+                        bbox_detector=ult.outputs["BBOX_DETECTOR"],
+                        sam_model_opt=samimp.outputs["SAM_MODEL"],
+                        segm_detector_opt=ult.outputs["SEGM_DETECTOR"],
+                    )
+                ),
+                SaveImageWebsocket(images=face.outputs["IMAGE"]),
+            )
         )
     )

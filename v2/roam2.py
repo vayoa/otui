@@ -305,6 +305,7 @@ class GroqBrainUI(UI):
                 cfg=7 if is_ponyxl else 5.5,
                 clip_skip=-2,
                 dialog=dialog,
+                face_detailer=True if style == "realistic" else False,
             )
             time.sleep(2)
 

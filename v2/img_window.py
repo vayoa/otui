@@ -51,6 +51,7 @@ class ImageUpdater(QObject):
         cfg=None,
         clip_skip=None,
         dialog=None,
+        face_detailer=None,
     ):
         # If the window is hidden, show it
         if self.window.isHidden():
@@ -84,6 +85,7 @@ class ImageUpdater(QObject):
                 cfg=cfg,
                 clip_skip=clip_skip,
                 dialog=dialog,
+                face_detailer=face_detailer,
             ),
             daemon=True,
         )
@@ -130,6 +132,7 @@ class ImageUpdater(QObject):
         cfg=None,
         clip_skip=None,
         dialog=None,
+        face_detailer=None,
     ):
         for i, (_, previews) in enumerate(
             self.eyes.generate_yield(
@@ -144,6 +147,7 @@ class ImageUpdater(QObject):
                 cfg=cfg,
                 clip_skip=clip_skip,
                 dialog=dialog,
+                face_detailer=face_detailer,
             )
         ):
             if self.stop_event.is_set():  # Check if we should stop
