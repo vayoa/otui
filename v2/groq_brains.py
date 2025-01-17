@@ -45,7 +45,7 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
     def chat(
         self,
         input: str | Sequence[Message] = [],
-        model: str = model,
+        model: str | None = None,
         messages: Optional[Sequence[Message]] = None,
         stream: Literal[False] = False,
         format: Literal["", "json"] = "",
@@ -57,7 +57,7 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
     def chat(
         self,
         input: str | Sequence[Message] = [],
-        model: str = model,
+        model: str | None = None,
         messages: Optional[Sequence[Message]] = None,
         stream: Literal[True] = True,
         format: Literal["", "json"] = "",
@@ -68,7 +68,7 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
     def chat(
         self,
         input: str | Sequence[Message] = [],
-        model: str = model,
+        model: str | None = None,
         messages: Optional[Sequence[Message]] = None,
         stream: bool = False,
         format: Literal["", "json"] = "",

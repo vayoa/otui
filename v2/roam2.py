@@ -37,6 +37,11 @@ RESOLUTION_PRESETS = {
     "portrait": (896, 1152),
 }
 
+LLM_MODELS = {
+    "l70": "llama-3.3-70b-versatile, reccomended",
+    "l8": "llama-3.1-8b-instant",
+}
+
 
 @dataclass(kw_only=True)
 class GroqBrainUI(UI):
@@ -137,6 +142,10 @@ class GroqBrainUI(UI):
                         key: f"{width}x{height} px."
                         for key, (width, height) in RESOLUTION_PRESETS.items()
                     },
+                },
+                "llm": {
+                    "meta": "change the llm model",
+                    "commands": LLM_MODELS,
                 },
             }
         )
@@ -287,6 +296,19 @@ class GroqBrainUI(UI):
                 else:
                     self.print(
                         f"[red]Layout [bold italic]{name}[/] is not a valid image resolution preset.[/]"
+                    )
+            return True
+        llm_param = params.get("llm")
+        if llm_param is not None:
+            if llm_param:
+                name = llm_param.strip()
+                options = LLM_MODELS.keys()
+                if name in options:
+                    self.brain.model = LLM_MODELS[name]
+                    self.print(f"[orange bold]Changed the llm model to [italic]{name}.")
+                else:
+                    self.print(
+                        f"[red]Layout [bold italic]{name}[/] is not a valid llm model.[/]"
                     )
             return True
         return False
@@ -471,13 +493,13 @@ class GroqBrainUI(UI):
                 if wait_time:
                     try:
                         wait_time = wait_time.split("Please try again in ")[1].split(
-                            "."
+                            ". Visit"
                         )[0]
                     except:
                         wait_time = "nan"
                     if wait_time:
                         self.console.print(
-                            f"[bold red]Rate limit exceeded, wait [italic yellow]]{wait_time}."
+                            f"[bold red]Rate limit exceeded, wait [italic yellow]{wait_time}."
                         )
             return
 
