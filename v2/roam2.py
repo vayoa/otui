@@ -39,7 +39,9 @@ RESOLUTION_PRESETS = {
 
 LLM_MODELS = {
     "l70": "llama-3.3-70b-versatile, reccomended",
+    "l70st": "llama3-70b-8192",
     "l8": "llama-3.1-8b-instant",
+    "mx": "mixtral-8x7b-32768",
 }
 
 
