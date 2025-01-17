@@ -404,11 +404,10 @@ class GroqBrainUI(UI):
                     result, tool_call_m, tool_use_m = _t
                 yield (chunk, content, result)
         except GroqAPIError as e:
-            self.console.print(
-                "[red bold]TOOL USE FAILED... [blue italic] Trying again..."
-            )
-
             if "failed_generation" in str(e):
+                self.console.print(
+                    "[red bold]TOOL USE FAILED... [blue italic] Trying again..."
+                )
                 if content:
                     self.brain.messages.append(
                         {"role": "assistant", "content": content}
@@ -418,7 +417,20 @@ class GroqBrainUI(UI):
                     ai=None,
                 )
                 self.brain.clear_last_messages(3, keep=2)
-                return
+            elif isinstance(e.body, dict):
+                wait_time = e.body.get("error", {}).get("message", "")
+                if wait_time:
+                    try:
+                        wait_time = wait_time.split("Please try again in ")[1].split(
+                            "."
+                        )[0]
+                    except:
+                        wait_time = "nan"
+                    if wait_time:
+                        self.console.print(
+                            f"[bold red]Rate limit exceeded, wait [italic yellow]]{wait_time}."
+                        )
+            return
 
         if ai:
             self.brain.clear_last_messages(1)
