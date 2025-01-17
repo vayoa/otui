@@ -307,7 +307,9 @@ class GroqBrainUI(UI):
                 options = LLM_MODELS.keys()
                 if name in options:
                     self.brain.model = LLM_MODELS[name]
-                    self.print(f"[orange bold]Changed the llm model to [italic]{name}.")
+                    self.print(
+                        f"[orange bold]Changed the llm model to [italic]{name} ({LLM_MODELS[name]})."
+                    )
                 else:
                     self.print(
                         f"[red]Layout [bold italic]{name}[/] is not a valid llm model.[/]"
