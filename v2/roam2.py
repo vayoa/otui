@@ -29,6 +29,15 @@ class ToolFunctions(TypedDict):
     function: Callable
 
 
+RESOLUTION_PRESETS = {
+    "normal": (1152, 896),
+    "highres": (1216, 912),
+    "wide": (1280, 896),
+    "ultrawide": (1408, 768),
+    "portrait": (896, 1152),
+}
+
+
 @dataclass(kw_only=True)
 class GroqBrainUI(UI):
     brain: GroqBrain = field(init=False)
@@ -81,6 +90,7 @@ class GroqBrainUI(UI):
     nsfw: bool = True
     image_model = "ponyxl"
     game_mode = False
+    resolution_preset = "normal"
 
     def __post_init__(self):
         self.brain = GroqBrain(
@@ -103,6 +113,7 @@ class GroqBrainUI(UI):
         ) == set(self.functions.keys())
 
         self.image_model = self.args.image_model
+        self.resolution_preset = self.args.resolution
 
         self.game_mode = self.args.game
         if self.game_mode:
@@ -120,6 +131,13 @@ class GroqBrainUI(UI):
                     },
                 },
                 "game | g": "toggle game mode",
+                "resolution | rs": {
+                    "meta": "change the image resolution preset",
+                    "commands": {
+                        key: f"{width}x{height} px."
+                        for key, (width, height) in RESOLUTION_PRESETS.items()
+                    },
+                },
             }
         )
 
@@ -243,11 +261,29 @@ class GroqBrainUI(UI):
                 f"[orange bold]Game mode is now [italic]{'[bold green]ON[/]' if self.game_mode else '[bold red]OFF[/]'}."
             )
             return True
+        resolution_param = params.get("resolution", params.get("rs"))
+        if resolution_param is not None:
+            if resolution_param:
+                name = resolution_param.strip()
+                options = RESOLUTION_PRESETS.keys()
+                if name in options:
+                    self.resolution_preset = name
+                    self.print(
+                        f"[orange bold]Changed the image resolution preset to [italic]{name}."
+                    )
+                else:
+                    self.print(
+                        f"[red]Layout [bold italic]{name}[/] is not a valid image resolution preset.[/]"
+                    )
+            return True
         return False
 
     def generate_scene_image(
         self, content: Markdown, prompt, danbooru, genders, style=None, dialog=None
     ):
+        if style:
+            style = style.lower()
+
         danbooru = danbooru.replace("_", " ")
 
         prompt = f"{prompt}, {danbooru}, {genders}"
@@ -276,7 +312,7 @@ class GroqBrainUI(UI):
 
             is_ponyxl = self.image_model == "ponyxl"
             sfw_neg_prompt = "(uncensored, nsfw, nude, porn, hentai:1.2)"
-            dimensions = (1152, 896)
+            dimensions = RESOLUTION_PRESETS[self.resolution_preset]
             self.preview_window.preview(
                 (
                     f"score_9, score_8_up, score_7_up, {prompt}"
@@ -526,6 +562,15 @@ def args(**kwargs) -> argparse.Namespace:
         action="store_true",
         default=kwargs.get("game") or False,
         help="Initializes otui in game mode.",
+    )
+
+    parser.add_argument(
+        "--resolution",
+        "--rs",
+        action="store",
+        default="normal",
+        choices=RESOLUTION_PRESETS.keys(),
+        help="The image resolution preset.",
     )
 
     return parser.parse_args()
