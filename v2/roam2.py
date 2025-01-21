@@ -450,7 +450,7 @@ class GroqBrainUI(UI):
                 tool_use_m = ChatCompletionToolMessageParam(
                     role="tool",
                     tool_call_id=tool_call.id,
-                    content=f"{c[:-3]} with args {tool_call_func.arguments}.",
+                    content=f"Successfully called tool.",
                 )
                 return ui_tool_call, tool_call_m, tool_use_m
 
