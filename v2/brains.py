@@ -45,7 +45,7 @@ class Brain(Generic[Message, Tool]):
 
     def clear_last_messages(self, n, keep=None):
         messages = self.messages
-        kept_messages = [messages[-keep:]] if keep is not None else []
+        kept_messages = messages[-keep:] if keep is not None else []
         messages = messages[:-n] + kept_messages
 
         self.messages = messages

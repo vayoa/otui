@@ -484,6 +484,7 @@ class GroqBrainUI(UI):
                     "[red bold]TOOL USE FAILED... [blue italic] Trying again..."
                 )
                 if content:
+                    self.console.print(Markdown(content))
                     self.brain.messages.append(
                         {"role": "assistant", "content": content}
                     )
@@ -502,9 +503,12 @@ class GroqBrainUI(UI):
                     except:
                         wait_time = "nan"
                     if wait_time:
-                        self.console.print(
-                            f"[bold red]Rate limit exceeded, wait [italic yellow]{wait_time}."
-                        )
+                        if wait_time[0].isnumeric():
+                            self.console.print(
+                                f"[bold red]Rate limit exceeded, wait [italic yellow]{wait_time}."
+                            )
+                        else:
+                            self.console.print(f"[bold red]{e}")
             return
 
         if ai:
