@@ -5,12 +5,14 @@ import uuid
 import json
 import urllib.request
 import urllib.parse
+from urllib.error import URLError
 import io
 import random
 import PIL.Image
 from rich_pixels import Pixels
 import bubble_painter
 from nodes import *
+import time
 
 
 class Eyes:
@@ -35,13 +37,22 @@ class Eyes:
         self.ws = websocket.WebSocket()
 
     def _connect(self):
-        if not self.ws.connected:
-            self.ws.connect(
-                "ws://{}/ws?clientId={}".format(self.server_address, self.client_id)
-            )
+        while True:
+            try:
+                if self.ws is None or not self.ws.connected:
+                    self.ws = websocket.WebSocket()
+                    self.ws.connect(
+                        "ws://{}/ws?clientId={}".format(
+                            self.server_address, self.client_id
+                        )
+                    )
+                break
+            except Exception as e:
+                print(f"Connection failed. Retrying in 5 seconds...\n{e}")
+                time.sleep(5)
 
     def close(self):
-        if self.ws.connected:
+        if self.ws and self.ws.connected:
             self.ws.close()
 
     def add_character(self, name, img, prompt):
@@ -156,7 +167,12 @@ class Eyes:
         p = {"prompt": prompt, "client_id": self.client_id}
         data = json.dumps(p).encode("utf-8")
         req = urllib.request.Request(f"http://{self.server_address}/prompt", data=data)
-        return json.loads(urllib.request.urlopen(req).read())
+        while True:  # Keep retrying until the server is back online
+            try:
+                return json.loads(urllib.request.urlopen(req).read())
+            except URLError as e:
+                print(f"Connection error: {e}. Retrying in 5 seconds...")
+                time.sleep(5)  # Wait for 5 seconds before retrying
 
     def get_images(
         self, workflow
@@ -166,22 +182,25 @@ class Eyes:
         output_images = {}
         current_node = ""
         while True:
-            out = self.ws.recv()
-            if isinstance(out, str):
-                message = json.loads(out)
-                if message["type"] == "executing":
-                    data = message["data"]
-                    if data["prompt_id"] == prompt_id:
-                        if data["node"] is None:
-                            break  # Execution is done
-                        else:
-                            current_node = data["node"]
-            else:
-                if current_node.endswith(OUTPUT_ID):
-                    images_output = output_images.get(current_node, [])
-                    images_output.append(PIL.Image.open(io.BytesIO(out[8:])))
-                    output_images[current_node] = images_output
-                    yield output_images
+            try:
+                out = self.ws.recv()
+                if isinstance(out, str):
+                    message = json.loads(out)
+                    if message["type"] == "executing":
+                        data = message["data"]
+                        if data["prompt_id"] == prompt_id:
+                            if data["node"] is None:
+                                break  # Execution is done
+                            else:
+                                current_node = data["node"]
+                else:
+                    if current_node.endswith(OUTPUT_ID):
+                        images_output = output_images.get(current_node, [])
+                        images_output.append(PIL.Image.open(io.BytesIO(out[8:])))
+                        output_images[current_node] = images_output
+                        yield output_images
+            except (websocket.WebSocketException, ConnectionResetError):
+                self._connect()
 
     def generate(
         self,
@@ -287,7 +306,14 @@ class Eyes:
         )
 
     def interrupt(self):
-        urllib.request.urlopen(f"http://{self.server_address}/interrupt", data=b"{}")
+        while True:  # Keep retrying until the server is back online
+            try:
+                urllib.request.urlopen(
+                    f"http://{self.server_address}/interrupt", data=b"{}"
+                )
+            except URLError as e:
+                print(f"Connection error: {e}. Retrying in 5 seconds...")
+                time.sleep(5)  # Wait for 5 seconds before retrying
 
 
 if __name__ == "__main__":
