@@ -38,7 +38,7 @@ RESOLUTION_PRESETS = {
 }
 
 LLM_MODELS = {
-    "l70": "llama-3.3-70b-versatile, reccomended",
+    "l70": "llama-3.3-70b-versatile",
     "l70st": "llama3-70b-8192",
     "l8": "llama-3.1-8b-instant",
     "mx": "mixtral-8x7b-32768",
@@ -101,6 +101,7 @@ class GroqBrainUI(UI):
 
     def __post_init__(self):
         self.brain = GroqBrain(
+            model=LLM_MODELS[self.args.model],
             messages=[
                 ChatCompletionSystemMessageParam(role="system", content=self.system),
             ],
@@ -564,8 +565,8 @@ def args(**kwargs) -> argparse.Namespace:
         "--model",
         "--m",
         action="store",
-        default="llama3.1",
-        help="The model to use for OTUI. Defaults to llama3.",
+        default="l70",
+        help="The model to use for OTUI. Defaults to l70 (llama-3.3-70b-versatile).",
     )
 
     parser.add_argument(
