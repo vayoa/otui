@@ -139,6 +139,7 @@ class Eyes:
             samimp = SAMLoaderImpact()
             size = dimensions[0] * dimensions[1]
             face = FaceDetailer(
+                seed=random.randint(0, 10**10),
                 image=vaed.outputs["IMAGE"],
                 model=cl.outputs["MODEL"],
                 clip=cl.outputs["CLIP"],

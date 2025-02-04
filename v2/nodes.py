@@ -309,10 +309,10 @@ class FaceDetailer(Node[O("FaceDetailer", {"IMAGE": IMAGE})]):
     sam_model_opt: SAM_MODEL
     segm_detector_opt: SEGM_DETECTOR
 
+    seed: int
     guide_size: int = 512
     guide_size_for: bool = True
     max_size: int = 1024
-    seed: int = 558099804136171
     steps: int = 10
     cfg: float = 7
     sampler_name: str = "dpmpp_2m_sde_gpu"
