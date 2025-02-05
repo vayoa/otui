@@ -111,7 +111,7 @@ class GroqBrainUI(UI):
         self.functions = {
             "generate_scene_image": {
                 "function": lambda args: ...,
-                "result_function": lambda tool_call, result: "Successfully called tool.",
+                "result_function": lambda tool_call: "Successfully called tool.",
                 "display_function": lambda tool_call, content: self.generate_scene_image(
                     content, **tool_call["args"]
                 ),
