@@ -1,5 +1,6 @@
 import argparse
 from dataclasses import dataclass, field
+import random
 import re
 from typing import Callable, Generator, List, Literal, Optional, TypedDict
 from groq_brains import GroqBrain, Message
@@ -90,7 +91,24 @@ class GroqBrainUI(UI):
                     },
                 },
                 "type": "function",
-            }
+            },
+            {
+                "function": {
+                    "name": "roll_dice",
+                    "description": "Function used to roll a dice to determine the outcome of an action / situation.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "sides": {
+                                "type": "integer",
+                                "description": "A positive number indicating the amount of sides of the die to roll.",
+                            }
+                        },
+                        "required": ["sides"],
+                    },
+                },
+                "type": "function",
+            },
         ],
     )
     initial_preview_pos: Optional[tuple[int, int]] = field(init=False, default=None)
@@ -115,7 +133,14 @@ class GroqBrainUI(UI):
                 "display_function": lambda tool_call, content: self.generate_scene_image(
                     content, **tool_call["args"]
                 ),
-            }
+            },
+            "roll_dice": {
+                "function": lambda args: random.randint(1, args["sides"]),
+                "result_function": lambda tool_call: str(tool_call["result"]),
+                "display_function": lambda tool_call, content: self.console.print(
+                    f'[purple]Rolled a d{tool_call["args"]["sides"]}, gotten [yellow bold italic]{tool_call["result"]}'
+                ),
+            },
         }
         assert set(
             tool.get("function", {}).get("name")
