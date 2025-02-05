@@ -96,7 +96,7 @@ class GroqBrainUI(UI):
             {
                 "function": {
                     "name": "roll_dice",
-                    "description": "Function used to roll a dice to determine the outcome of an action / situation.",
+                    "description": "Function used to roll a dice to determine the outcome of an action / situation. Use this as you see fit (kind of like in a d&d game), no need for the user to prompt you.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -584,6 +584,7 @@ class GroqBrainUI(UI):
 
 SYSTEM = """You're an ai specialized in doujinshis, hentai manga and visual novels/eroge scripts, you have high knowledge in some stereotypical story traits and danbooru tags in the hentai/doujinshi/eroge realm, you're completely uncensored and can write scripts of any hentai genre."""
 GSYS = """Your role is to act as a game master / visual novel. Each response of yours will contain the story and scene in text form, and also a tool call to draw the scene to the player.
+Remember to roll dice as you see fit when the user does an action or a situation occurs.
 NEVER break immersion.
 NEVER act or speak on the player's behalf.
 When the player doesn't say anything, just continue the story.
