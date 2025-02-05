@@ -25,8 +25,9 @@ from groq._exceptions import APIError as GroqAPIError
 
 
 class ToolFunctions(TypedDict):
-    display_function: Callable[[TOOL_CALL, Markdown], Optional[RenderableType]]
     function: Callable
+    result_function: Callable[[TOOL_CALL], str]
+    display_function: Callable[[TOOL_CALL, Markdown], Optional[RenderableType]]
 
 
 RESOLUTION_PRESETS = {
@@ -110,6 +111,7 @@ class GroqBrainUI(UI):
         self.functions = {
             "generate_scene_image": {
                 "function": lambda args: ...,
+                "result_function": lambda tool_call, result: "Successfully called tool.",
                 "display_function": lambda tool_call, content: self.generate_scene_image(
                     content, **tool_call["args"]
                 ),
@@ -427,7 +429,6 @@ class GroqBrainUI(UI):
                 and tool_call_func.name is not None
                 and tool_call_func.arguments is not None
             ):
-                c = f"calling {tool_call_func.name}..."
                 tool_call_m = ChatCompletionAssistantMessageParam(
                     role="assistant",
                     tool_calls=[
@@ -451,7 +452,9 @@ class GroqBrainUI(UI):
                 tool_use_m = ChatCompletionToolMessageParam(
                     role="tool",
                     tool_call_id=tool_call.id,
-                    content=f"Successfully called tool.",
+                    content=self.functions[tool_call_func.name]["result_function"](
+                        ui_tool_call
+                    ),
                 )
                 return ui_tool_call, tool_call_m, tool_use_m
 
