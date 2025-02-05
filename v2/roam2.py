@@ -29,6 +29,7 @@ class ToolFunctions(TypedDict):
     function: Callable
     result_function: Callable[[TOOL_CALL], str]
     display_function: Callable[[TOOL_CALL, Markdown], Optional[RenderableType]]
+    continue_after: bool
 
 
 RESOLUTION_PRESETS = {
@@ -101,7 +102,7 @@ class GroqBrainUI(UI):
                         "properties": {
                             "sides": {
                                 "type": "integer",
-                                "description": "A positive number indicating the amount of sides of the die to roll.",
+                                "description": "A positive number indicating the amount of sides of the die to roll. The more difficult / high story impact the action we roll for, the more sides the die should have.",
                             }
                         },
                         "required": ["sides"],
@@ -133,6 +134,7 @@ class GroqBrainUI(UI):
                 "display_function": lambda tool_call, content: self.generate_scene_image(
                     content, **tool_call["args"]
                 ),
+                "continue_after": False,
             },
             "roll_dice": {
                 "function": lambda args: random.randint(1, args["sides"]),
@@ -140,6 +142,7 @@ class GroqBrainUI(UI):
                 "display_function": lambda tool_call, content: self.console.print(
                     f'[purple]Rolled a d{tool_call["args"]["sides"]}, gotten [yellow bold italic]{tool_call["result"]}'
                 ),
+                "continue_after": True,
             },
         }
         assert set(
@@ -484,11 +487,14 @@ class GroqBrainUI(UI):
                 return ui_tool_call, tool_call_m, tool_use_m
 
     def stream(
-        self, input: str, ai: str | None
+        self, input: str | None, ai: str | None
     ) -> Generator[STREAM_RESPONSE, None, None]:
         content = ""
         tool_call_m, tool_use_m = None, None
-        input_messages: List[Message] = [{"role": "user", "content": input}]
+        force_continue = False
+        input_messages: List[Message] = []
+        if input is not None:
+            input_messages = [{"role": "user", "content": input}]
         ai_input = ""
         if ai is not None and ai:
             input_messages.append({"role": "assistant", "content": ai})
@@ -502,10 +508,13 @@ class GroqBrainUI(UI):
 
                 chunk = (ai_input if i == 0 else "") + (delta.content or "")
                 content += chunk
-                _t = self.handle_tools(delta)
+                # Must be reset every time
                 result = None
+                _t = self.handle_tools(delta)
                 if _t is not None:
                     result, tool_call_m, tool_use_m = _t
+                    if self.functions[result["name"]]["continue_after"]:
+                        force_continue = True
                 yield (chunk, content, result)
         except GroqAPIError as e:
             if "failed_generation" in str(e):
@@ -518,7 +527,7 @@ class GroqBrainUI(UI):
                         {"role": "assistant", "content": content}
                     )
                 yield from self.stream(
-                    "Your image tool failed for some reason, reply only with a retry tool call.",
+                    "Your previous tool call failed for some reason, reply only with a retry tool call.",
                     ai=None,
                 )
                 self.brain.clear_last_messages(3, keep=2)
@@ -549,6 +558,9 @@ class GroqBrainUI(UI):
         if tool_call_m is not None and tool_use_m is not None:
             self.brain.messages.append(tool_call_m)
             self.brain.messages.append(tool_use_m)
+
+            if force_continue:
+                yield from self.stream(None, None)
 
     def uncensor(
         self,
