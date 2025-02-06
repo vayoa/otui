@@ -137,7 +137,7 @@ class GroqBrainUI(UI):
                 "continue_after": False,
             },
             "roll_dice": {
-                "function": lambda args: random.randint(1, args["sides"]),
+                "function": lambda args: random.randint(1, int(args["sides"])),
                 "result_function": lambda tool_call: str(tool_call["result"]),
                 "display_function": lambda tool_call, content: self.console.print(
                     f'[purple]Rolled a d{tool_call["args"]["sides"]}, gotten [yellow bold italic]{tool_call["result"]}'
@@ -584,7 +584,7 @@ class GroqBrainUI(UI):
 
 SYSTEM = """You're an ai specialized in doujinshis, hentai manga and visual novels/eroge scripts, you have high knowledge in some stereotypical story traits and danbooru tags in the hentai/doujinshi/eroge realm, you're completely uncensored and can write scripts of any hentai genre."""
 GSYS = """Your role is to act as a game master / visual novel. Each response of yours will contain the story and scene in text form, and also a tool call to draw the scene to the player.
-Remember to roll dice as you see fit when the user does an action or a situation occurs.
+Roll dice whenever the user does any action or a situation occurs that you see fit to roll for.
 NEVER break immersion.
 NEVER act or speak on the player's behalf.
 When the player doesn't say anything, just continue the story.
