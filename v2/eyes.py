@@ -147,7 +147,7 @@ class Eyes:
         )
         vaed = VAEDecode(samples=ks.outputs["LATENT"], vae=cl.outputs["VAE"])
 
-        nodes = [cl, cs, l, pos, neg, ks, vaed]
+        nodes += [cl, cs, l, pos, neg, ks, vaed]
 
         if lcm:
             ll = LoraLoader(model=cl.outputs["MODEL"], clip=cl.outputs["CLIP"])
@@ -194,7 +194,10 @@ class Eyes:
                     nodes.append(csm)
 
                 combinecond = ImpactCombineConditionings(
-                    [pos.outputs["CONDITIONING"], *section_conditions]
+                    [
+                        pos.outputs["CONDITIONING"],
+                        *[csm.outputs["CONDITIONING"] for csm in section_conditions],
+                    ]
                 )
                 nodes.append(combinecond)
 

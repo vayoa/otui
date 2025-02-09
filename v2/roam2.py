@@ -62,7 +62,10 @@ class GroqBrainUI(UI):
             {
                 "function": {
                     "name": "generate_scene_image",
-                    "description": "Function used to generate an image based on a text prompt using stable diffusion. Does not 'remember' previous prompts, so treat each prompt as if you've never prompted it before. Has no idea of the characters present in the story, so whenever you're including them describe their appearance. Make sure you image prompts are structured as if you're explaining to someone what exists in the image.",
+                    "description": """Function used to generate an image (sized 1024 x 1024 px) based on a text prompt using stable diffusion.
+Does not 'remember' previous prompts, so treat each prompt as if you've never prompted it before.
+Has no idea of the characters present in the story, so whenever you're including them describe their appearance.
+Make sure you image prompts are structured as if you're explaining to someone what exists in the image.""",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -86,6 +89,35 @@ class GroqBrainUI(UI):
                             "dialog": {
                                 "type": "string",
                                 "description": "If a character is saying something in the scene, this is her dialog.",
+                            },
+                            "sections": {
+                                "type": "array",
+                                "description": "The section array is where you can specify the location and presence of specific characters / objects in your image. There's one caveat: the section prompts cannot introduce new ideas/concepts in the image that were not written in the main prompt. The size of each section shouldn't be too small, just the crude broad coordinates to seperate it from other characters/objects.",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "prompt": {
+                                            "type": "string",
+                                            "description": "A medium-length prompt using natural language and danbooru tags for the object in this section. Do not over-complicate this prompt.",
+                                        },
+                                        "x": {
+                                            "type": "integer",
+                                            "description": "The x coordinate of the section in pixels.",
+                                        },
+                                        "y": {
+                                            "type": "integer",
+                                            "description": "The y coordinate of the section in pixels.",
+                                        },
+                                        "width": {
+                                            "type": "integer",
+                                            "description": "The width of the section in pixels.",
+                                        },
+                                        "height": {
+                                            "type": "integer",
+                                            "description": "The height of the section in pixels.",
+                                        },
+                                    },
+                                },
                             },
                         },
                         "required": ["prompt", "danbooru", "genders"],
@@ -349,8 +381,19 @@ class GroqBrainUI(UI):
         return False
 
     def generate_scene_image(
-        self, content: Markdown, prompt, danbooru, genders, style=None, dialog=None
+        self,
+        content: Markdown,
+        prompt,
+        danbooru,
+        genders,
+        style=None,
+        dialog=None,
+        sections=None,
     ):
+
+        if sections:
+            self.console.print(sections)
+
         if style:
             style = style.lower()
 
@@ -412,6 +455,7 @@ class GroqBrainUI(UI):
                 clip_skip=-2,
                 dialog=dialog,
                 face_detailer=True if style == "realistic" else False,
+                sections=sections,
             )
             time.sleep(2)
 
