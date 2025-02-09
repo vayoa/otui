@@ -319,6 +319,7 @@ class Eyes:
         clip_skip=None,
         dialog=None,
         face_detailer=None,
+        sections=None,
     ) -> Generator[tuple[Image | None, dict[str, list[Image]] | None], None, None]:
         for result in self.get_images(
             self.get_workflow(
@@ -334,6 +335,7 @@ class Eyes:
                 clip_skip=clip_skip,
                 dialog=bool(dialog),
                 face_detailer=bool(face_detailer),
+                sections=sections,
             )
         ):
             if result is not None:

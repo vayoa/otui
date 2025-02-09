@@ -29,7 +29,7 @@ class ImageUpdater(QObject):
         # Initialize GUI on the main thread
         app = QApplication.instance() or QApplication(sys.argv)
         self.window = ImagePreviewWindow(
-            self, self.window_title, app.primaryScreen().size().toTuple()
+            self, self.window_title, app.primaryScreen().size().toTuple()  # type: ignore
         )  # Initialize the window here
         self.window.show()  # Show the window immediately
         app.exec()  # This starts the Qt event loop
@@ -52,44 +52,48 @@ class ImageUpdater(QObject):
         clip_skip=None,
         dialog=None,
         face_detailer=None,
+        sections=None,
     ):
         # If the window is hidden, show it
-        if self.window.isHidden():
-            self.window.show()
+        if self.window is not None:
 
-        # Clear the image immediately to prevent flash of previous images
-        self.window.clear_image()  # Clear the image on the window
+            if self.window.isHidden():
+                self.window.show()
 
-        # Signal the previous thread to stop
-        if self.preview_thread and self.preview_thread.is_alive():
-            self.stop_event.set()  # Signal the thread to stop
-            self.eyes.interrupt()  # Interrupt the generation
-            self.preview_thread.join()  # Wait for it to finish
+            # Clear the image immediately to prevent flash of previous images
+            self.window.clear_image()  # Clear the image on the window
 
-        # Reset the stop event for the new thread
-        self.stop_event.clear()
+            # Signal the previous thread to stop
+            if self.preview_thread and self.preview_thread.is_alive():
+                self.stop_event.set()  # Signal the thread to stop
+                self.eyes.interrupt()  # Interrupt the generation
+                self.preview_thread.join()  # Wait for it to finish
 
-        self.eyes._connect()
+            # Reset the stop event for the new thread
+            self.stop_event.clear()
 
-        # Start a new preview thread
-        self.preview_thread = threading.Thread(
-            target=lambda: self.generate_images(
-                positive,
-                negative=negative,
-                dimensions=dimensions,
-                character_image=character_image,
-                lcm=lcm,
-                checkpoint=checkpoint,
-                steps=steps,
-                sampler_name=sampler_name,
-                cfg=cfg,
-                clip_skip=clip_skip,
-                dialog=dialog,
-                face_detailer=face_detailer,
-            ),
-            daemon=True,
-        )
-        self.preview_thread.start()
+            self.eyes._connect()
+
+            # Start a new preview thread
+            self.preview_thread = threading.Thread(
+                target=lambda: self.generate_images(
+                    positive,
+                    negative=negative,
+                    dimensions=dimensions,
+                    character_image=character_image,
+                    lcm=lcm,
+                    checkpoint=checkpoint,
+                    steps=steps,
+                    sampler_name=sampler_name,
+                    cfg=cfg,
+                    clip_skip=clip_skip,
+                    dialog=dialog,
+                    face_detailer=face_detailer,
+                    sections=sections,
+                ),
+                daemon=True,
+            )
+            self.preview_thread.start()
 
     def feather_edges(self, image, fade_margin=15):
         # Load the image and ensure it has an alpha channel for transparency
@@ -133,6 +137,7 @@ class ImageUpdater(QObject):
         clip_skip=None,
         dialog=None,
         face_detailer=None,
+        sections=None,
     ):
         for i, (_, previews) in enumerate(
             self.eyes.generate_yield(
@@ -148,6 +153,7 @@ class ImageUpdater(QObject):
                 clip_skip=clip_skip,
                 dialog=dialog,
                 face_detailer=face_detailer,
+                sections=sections,
             )
         ):
             if self.stop_event.is_set():  # Check if we should stop
@@ -252,7 +258,7 @@ class ImagePreviewWindow(QMainWindow):
 
         # Create a new pixmap with the scaled dimensions
         return pixmap.scaled(
-            new_width, new_height, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            new_width, new_height, Qt.KeepAspectRatio, Qt.SmoothTransformation  # type: ignore
         )
 
     def clear_image(self):
