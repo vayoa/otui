@@ -42,6 +42,7 @@ class Node(Generic[T]):
     _class_name: Optional[str] = field(init=False, default=None)
     _title: str = field(init=False, default="")
     outputs: T = field(init=False)
+    _json_inputs: dict = field(init=False)
 
     def __post_init__(self):
         self._class_name = self._class_name or self.__class__.__name__
@@ -59,6 +60,12 @@ class Node(Generic[T]):
         if not self._title:
             self._title = output_class_name
 
+        self._json_inputs = {
+            key: self.__dict__[key]
+            for key in self.__dict__
+            if key not in ("id", "outputs", "_output_node", "_class_name", "_title")
+        }
+
     def rename(self, new_id: str):
         if self._output_node and not new_id.endswith(OUTPUT_ID):
             new_id += OUTPUT_ID
@@ -68,12 +75,7 @@ class Node(Generic[T]):
     def json(self) -> Dict:
         return {
             self.id: {
-                "inputs": {
-                    key: self.__dict__[key]
-                    for key in self.__dict__
-                    if key
-                    not in ("id", "outputs", "_output_node", "_class_name", "_title")
-                },
+                "inputs": self._json_inputs,
                 "class_type": self._class_name,
                 "_meta": {"title": self._title},
             }
@@ -339,56 +341,158 @@ class FaceDetailer(Node[O("FaceDetailer", {"IMAGE": IMAGE})]):
     _output_node = True
 
 
+@dataclass
+class SolidMask(Node[O("SolidMask", {"MASK": MASK})]):
+    value: float = 1.0
+    width: int = 512
+    height: int = 816
+
+
+@dataclass
+class MaskComposite(Node[O("MaskComposite", {"MASK": MASK})]):
+    destination: MASK
+    source: MASK
+    x: int = 512
+    y: int = 816
+    operation: Literal["multiply", "add", "subtract", "or", "xor"] = "multiply"
+
+
+@dataclass
+class AttentionCoupleInput:
+    conditioning: CONDITIONING
+    mask: MASK
+
+
+@dataclass
+class AttentionCouple(Node[O("Attention Couple 🍌", {"MODEL": MODEL})]):
+    model: MODEL
+    base_mask: MASK
+    inputs: list[AttentionCoupleInput]
+
+    _class_name = "AttentionCouple|cgem156"
+
+    def __post_init__(self):
+        Node.__post_init__(self)
+        self._json_inputs.pop("inputs")
+
+        dynamic_inputs = [
+            {f"cond_{i+1}": aci.conditioning, f"mask_{i+1}": aci.mask}
+            for i, aci in enumerate(self.inputs)
+        ]
+
+        self._json_inputs = self._json_inputs | {
+            k: v for di in dynamic_inputs for k, v in di.items()
+        }
+
+
 if __name__ == "__main__":
     from rich import print
+    from eyes import Eyes
 
-    print(
-        json.dumps(
-            workflow(
-                (cl := CheckpointLoaderSimple("ponyRealism_v22MainVAE.safetensors")),
-                (l := EmptyLatentImage()),
-                (
-                    pos := CLIPTextEncode(
-                        clip=cl.outputs["CLIP"],
-                        text="score_9, score_8_up, score_7_up, An italian teenager with long dark blonde hair is standing near a royal roman balcony, she is looking at the camera and wearing a tight tank top and short white tennis skirt, navel",
-                    )
-                ),
-                (
-                    neg := CLIPTextEncode(
-                        clip=cl.outputs["CLIP"], text="score_6, score_5, score_4"
-                    )
-                ),
-                (
-                    ks := KSampler(
-                        model=cl.outputs["MODEL"],
-                        positive=pos.outputs["CONDITIONING"],
-                        negative=neg.outputs["CONDITIONING"],
-                        latent_image=l.outputs["LATENT"],
-                        seed=1,
-                    )
-                ),
-                (
-                    vaed := VAEDecode(
-                        samples=ks.outputs["LATENT"], vae=cl.outputs["VAE"]
-                    )
-                ),
-                SaveImageWebsocket(images=vaed.outputs["IMAGE"]),
-                (ult := UltralyticsDetectorProvider()),
-                (samimp := SAMLoaderImpact()),
-                (
-                    face := FaceDetailer(
-                        image=vaed.outputs["IMAGE"],
-                        model=cl.outputs["MODEL"],
-                        clip=cl.outputs["CLIP"],
-                        vae=cl.outputs["VAE"],
-                        positive=pos.outputs["CONDITIONING"],
-                        negative=neg.outputs["CONDITIONING"],
-                        bbox_detector=ult.outputs["BBOX_DETECTOR"],
-                        sam_model_opt=samimp.outputs["SAM_MODEL"],
-                        segm_detector_opt=ult.outputs["SEGM_DETECTOR"],
-                    )
-                ),
-                SaveImageWebsocket(images=face.outputs["IMAGE"]),
+    # l = [AttentionCoupleInput(CONDITIONING(("1", 1)), MASK(("1", 1))) for i in range(4)]
+    # ac = AttentionCouple(MODEL(("0", 12)), MASK(("0", 12)), l)
+    # print(ac.json())
+
+    seed = 2
+
+    w = workflow(
+        (cl := CheckpointLoaderSimple("ponyRealism_v22MainVAE.safetensors")),
+        (l := EmptyLatentImage(width=1152, height=896)),
+        (
+            pos := CLIPTextEncode(
+                clip=cl.outputs["CLIP"],
+                text="score_9, score_8_up, score_7_up, An italian teenager with dark blonde hair is standing next to her mother, she is wearing a cheerleader outfit while her mother is wearing a belly dancer outfit, 2girls, the teenger is putting her hand around her mother's waist, looking at viewer, background is a family house, the teenager is saluting while the mother is squatting",
             )
-        )
+        ),
+        (
+            pos1 := CLIPTextEncode(
+                clip=cl.outputs["CLIP"],
+                text="italian teenager with dark blonde hair wearing a red and white cheerleader outfit, looking at viewer, salute, serious, crying, straight on",
+            )
+        ),
+        (
+            pos2 := CLIPTextEncode(
+                clip=cl.outputs["CLIP"],
+                text="italian mother with bright blonde hair wearing a yellow belly dancer outfit, looking at viewer, chubby, ahegao, tongue out, huge smile, squatting",
+            )
+        ),
+        (
+            neg := CLIPTextEncode(
+                clip=cl.outputs["CLIP"], text="score_6, score_5, score_4"
+            )
+        ),
+        (smb := SolidMask(value=1.0, width=l.width, height=l.height)),
+        (smfb := SolidMask(value=0.0, width=l.width, height=l.height)),
+        (sm1 := SolidMask(value=1.0, width=(l.width // 2), height=l.height)),
+        (
+            mc1 := MaskComposite(
+                destination=smfb.outputs["MASK"],
+                source=sm1.outputs["MASK"],
+                x=0,
+                y=0,
+                operation="add",
+            )
+        ),
+        (
+            mc2 := MaskComposite(
+                destination=smfb.outputs["MASK"],
+                source=sm1.outputs["MASK"],
+                x=(l.width // 2),
+                y=0,
+                operation="add",
+            )
+        ),
+        (
+            attc := AttentionCouple(
+                cl.outputs["MODEL"],
+                smb.outputs["MASK"],
+                inputs=[
+                    AttentionCoupleInput(
+                        conditioning=pos1.outputs["CONDITIONING"],
+                        mask=mc1.outputs["MASK"],
+                    ),
+                    AttentionCoupleInput(
+                        conditioning=pos2.outputs["CONDITIONING"],
+                        mask=mc2.outputs["MASK"],
+                    ),
+                ],
+            )
+        ),
+        (
+            ks := KSampler(
+                model=attc.outputs["MODEL"],
+                positive=pos.outputs["CONDITIONING"],
+                negative=neg.outputs["CONDITIONING"],
+                latent_image=l.outputs["LATENT"],
+                seed=seed,
+            )
+        ),
+        (vaed := VAEDecode(samples=ks.outputs["LATENT"], vae=cl.outputs["VAE"])),
+        SaveImageWebsocket(images=vaed.outputs["IMAGE"]),
+        (ult := UltralyticsDetectorProvider()),
+        (samimp := SAMLoaderImpact()),
+        (
+            face := FaceDetailer(
+                seed=seed,
+                image=vaed.outputs["IMAGE"],
+                model=cl.outputs["MODEL"],
+                clip=cl.outputs["CLIP"],
+                vae=cl.outputs["VAE"],
+                positive=pos.outputs["CONDITIONING"],
+                negative=neg.outputs["CONDITIONING"],
+                bbox_detector=ult.outputs["BBOX_DETECTOR"],
+                sam_model_opt=samimp.outputs["SAM_MODEL"],
+                segm_detector_opt=ult.outputs["SEGM_DETECTOR"],
+            )
+        ),
+        SaveImageWebsocket(images=face.outputs["IMAGE"]),
     )
+
+    eyes = Eyes()
+    v = None
+    for r in eyes.get_images(w):
+        if r is not None:
+            v = r[list(r.keys())[-1]][-1]
+
+    if v is not None:
+        v.show()
