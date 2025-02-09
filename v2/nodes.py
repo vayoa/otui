@@ -385,6 +385,32 @@ class AttentionCouple(Node[O("Attention Couple 🍌", {"MODEL": MODEL})]):
         }
 
 
+@dataclass
+class ConditioningSetMask(
+    Node[O("Conditioning (Set Mask)", {"CONDITIONING": CONDITIONING})]
+):
+    conditioning: CONDITIONING
+    mask: MASK
+    strength: float = 1.0
+    set_cond_area: Literal["default", "mask bounds"] = "default"
+
+
+@dataclass
+class ImpactCombineConditionings(
+    Node[O("Combine Conditionings", {"CONDITIONING": CONDITIONING})]
+):
+    conditionings: list[CONDITIONING]
+
+    def __post_init__(self):
+        Node.__post_init__(self)
+        self._json_inputs.pop("conditionings")
+
+        self._json_inputs = self._json_inputs | {
+            f"conditioning{i+1}": conditioning
+            for i, conditioning in enumerate(self.conditionings)
+        }  # type: ignore
+
+
 if __name__ == "__main__":
     from rich import print
     from eyes import Eyes
@@ -393,7 +419,7 @@ if __name__ == "__main__":
     # ac = AttentionCouple(MODEL(("0", 12)), MASK(("0", 12)), l)
     # print(ac.json())
 
-    seed = 2
+    seed = 4
 
     w = workflow(
         (cl := CheckpointLoaderSimple("ponyRealism_v22MainVAE.safetensors")),
@@ -469,6 +495,29 @@ if __name__ == "__main__":
         ),
         (vaed := VAEDecode(samples=ks.outputs["LATENT"], vae=cl.outputs["VAE"])),
         SaveImageWebsocket(images=vaed.outputs["IMAGE"]),
+        (
+            csm1 := ConditioningSetMask(
+                conditioning=pos1.outputs["CONDITIONING"],
+                mask=mc1.outputs["MASK"],
+                strength=0.85,
+            )
+        ),
+        (
+            csm2 := ConditioningSetMask(
+                conditioning=pos2.outputs["CONDITIONING"],
+                mask=mc2.outputs["MASK"],
+                strength=0.85,
+            )
+        ),
+        (
+            combinecond := ImpactCombineConditionings(
+                [
+                    pos.outputs["CONDITIONING"],
+                    csm1.outputs["CONDITIONING"],
+                    csm2.outputs["CONDITIONING"],
+                ]
+            )
+        ),
         (ult := UltralyticsDetectorProvider()),
         (samimp := SAMLoaderImpact()),
         (
@@ -478,7 +527,7 @@ if __name__ == "__main__":
                 model=cl.outputs["MODEL"],
                 clip=cl.outputs["CLIP"],
                 vae=cl.outputs["VAE"],
-                positive=pos.outputs["CONDITIONING"],
+                positive=combinecond.outputs["CONDITIONING"],
                 negative=neg.outputs["CONDITIONING"],
                 bbox_detector=ult.outputs["BBOX_DETECTOR"],
                 sam_model_opt=samimp.outputs["SAM_MODEL"],
