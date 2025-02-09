@@ -45,6 +45,7 @@ LLM_MODELS = {
     "l70st": "llama3-70b-8192",
     "l8": "llama-3.1-8b-instant",
     "mx": "mixtral-8x7b-32768",
+    "ds": "deepseek-r1-distill-llama-70b",
 }
 
 
@@ -92,7 +93,11 @@ Make sure you image prompts are structured as if you're explaining to someone wh
                             },
                             "sections": {
                                 "type": "array",
-                                "description": "The section array is where you can specify the location and presence of specific characters / objects in your image. There's one caveat: the section prompts cannot introduce new ideas/concepts in the image that were not written in the main prompt. The size of each section shouldn't be too small, just the crude broad coordinates to seperate it from other characters/objects.",
+                                "description": """The section array is where you can specify the location and presence of specific characters / objects in your image.
+There's no reason to use this if your image has only one subject / object.
+There's one caveat: the section prompts cannot introduce new ideas/concepts in the image that were not written in the main prompt.
+The size of each section shouldn't be small, just the crude broad coordinates to seperate it from other characters/objects.
+Remember to prompt each section as if it doesn't know what happened in the story, like you're describing the scene to someone.""",
                                 "items": {
                                     "type": "object",
                                     "properties": {
@@ -682,6 +687,7 @@ def args(**kwargs) -> argparse.Namespace:
         "--m",
         action="store",
         default="l70",
+        choices=LLM_MODELS.keys(),
         help="The model to use for OTUI. Defaults to l70 (llama-3.3-70b-versatile).",
     )
 
