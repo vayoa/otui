@@ -1,5 +1,5 @@
 import struct
-from typing import Generator
+from typing import Generator, TypedDict
 import websocket  # NOTE: websocket-client (https://github.com/websocket-client/websocket-client)
 import uuid
 import json
@@ -13,6 +13,14 @@ from rich_pixels import Pixels
 import bubble_painter
 from nodes import *
 import time
+
+
+class Section(TypedDict):
+    width: int
+    height: int
+    x: int
+    y: int
+    prompt: str
 
 
 class Eyes:
@@ -72,7 +80,11 @@ class Eyes:
         clip_skip=None,
         dialog=False,
         face_detailer=False,
+        sections: list[Section] | None = None,
     ):
+
+        nodes = []
+        attcnodes = []
 
         lcm = lcm if lcm is not None else self.lcm
         negative = negative or self.default_negative_prompt
@@ -87,9 +99,44 @@ class Eyes:
             clip=cs.outputs["CLIP"],
             text=positive,
         )
+
+        if sections:
+            smb = SolidMask(value=1.0, width=l.width, height=l.height)
+            smfb = SolidMask(value=0.0, width=l.width, height=l.height)
+            nodes += [smb, smfb]
+
+            for section in sections:
+                spos = CLIPTextEncode(clip=cl.outputs["CLIP"], text=section["prompt"])
+                sm = SolidMask(
+                    value=1.0, width=section["width"], height=section["height"]
+                )
+                mc = MaskComposite(
+                    destination=smfb.outputs["MASK"],
+                    source=sm.outputs["MASK"],
+                    x=section["x"],
+                    y=section["y"],
+                    operation="add",
+                )
+                part = [spos, sm, mc]
+                attcnodes.append(part)
+                nodes += part
+
+            attc = AttentionCouple(
+                cl.outputs["MODEL"],
+                smb.outputs["MASK"],
+                inputs=[
+                    AttentionCoupleInput(
+                        conditioning=spos.outputs["CONDITIONING"],
+                        mask=mc.outputs["MASK"],
+                    )
+                    for spos, sm, mc in attcnodes
+                ],
+            )
+            nodes.append(attc)
+
         neg = CLIPTextEncode(clip=cs.outputs["CLIP"], text=negative)
         ks = KSampler(
-            model=cl.outputs["MODEL"],
+            model=attc.outputs["MODEL"] if sections else cl.outputs["MODEL"],
             positive=pos.outputs["CONDITIONING"],
             negative=neg.outputs["CONDITIONING"],
             latent_image=l.outputs["LATENT"],
@@ -135,16 +182,36 @@ class Eyes:
         output_image = vaed.outputs["IMAGE"]
 
         if face_detailer:
+            if sections:
+                section_conditions = []
+                for spos, sm, mc in attcnodes:
+                    csm = ConditioningSetMask(
+                        conditioning=spos.outputs["CONDITIONING"],
+                        mask=mc.outputs["MASK"],
+                        strength=0.85,
+                    )
+                    section_conditions.append(csm)
+                    nodes.append(csm)
+
+                combinecond = ImpactCombineConditionings(
+                    [pos.outputs["CONDITIONING"], *section_conditions]
+                )
+                nodes.append(combinecond)
+
             ult = UltralyticsDetectorProvider()
             samimp = SAMLoaderImpact()
             size = dimensions[0] * dimensions[1]
             face = FaceDetailer(
                 seed=random.randint(0, 10**10),
-                image=vaed.outputs["IMAGE"],
                 model=cl.outputs["MODEL"],
+                image=vaed.outputs["IMAGE"],
                 clip=cl.outputs["CLIP"],
                 vae=cl.outputs["VAE"],
-                positive=pos.outputs["CONDITIONING"],
+                positive=(
+                    combinecond.outputs["CONDITIONING"]
+                    if sections
+                    else pos.outputs["CONDITIONING"]
+                ),
                 negative=neg.outputs["CONDITIONING"],
                 bbox_detector=ult.outputs["BBOX_DETECTOR"],
                 sam_model_opt=samimp.outputs["SAM_MODEL"],
