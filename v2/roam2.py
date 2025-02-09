@@ -62,7 +62,7 @@ class GroqBrainUI(UI):
             {
                 "function": {
                     "name": "generate_scene_image",
-                    "description": """Function used to generate an image (sized 1024 x 1024 px) based on a text prompt using stable diffusion.
+                    "description": """Function used to generate an image (sized {size} px) based on a text prompt using stable diffusion.
 Does not 'remember' previous prompts, so treat each prompt as if you've never prompted it before.
 Has no idea of the characters present in the story, so whenever you're including them describe their appearance.
 Make sure you image prompts are structured as if you're explaining to someone what exists in the image.""",
@@ -99,6 +99,10 @@ Make sure you image prompts are structured as if you're explaining to someone wh
                                         "prompt": {
                                             "type": "string",
                                             "description": "A medium-length prompt using natural language and danbooru tags for the object in this section. Do not over-complicate this prompt.",
+                                        },
+                                        "danbooru": {
+                                            "type": "string",
+                                            "description": "A medium-length list of danbooru tags for this section delimited with commas.",
                                         },
                                         "x": {
                                             "type": "integer",
@@ -151,7 +155,20 @@ Make sure you image prompts are structured as if you're explaining to someone wh
     game_mode = False
     resolution_preset = "normal"
 
+    def format_tools(self):
+        res = RESOLUTION_PRESETS[self.resolution_preset]
+        formatted_tools = []
+        for tool in self.tools:
+            if "description" in tool["function"]:
+                tool["function"]["description"] = tool["function"][
+                    "description"
+                ].format(size=f"{res[0]} x {res[1]}")
+            formatted_tools.append(tool)
+
     def __post_init__(self):
+        self.resolution_preset = self.args.resolution
+        self.format_tools()
+
         self.brain = GroqBrain(
             model=LLM_MODELS[self.args.model],
             messages=[
@@ -183,7 +200,6 @@ Make sure you image prompts are structured as if you're explaining to someone wh
         ) == set(self.functions.keys())
 
         self.image_model = self.args.image_model
-        self.resolution_preset = self.args.resolution
 
         self.game_mode = self.args.game
         if self.game_mode:
@@ -355,6 +371,7 @@ Make sure you image prompts are structured as if you're explaining to someone wh
                 options = RESOLUTION_PRESETS.keys()
                 if name in options:
                     self.resolution_preset = name
+                    self.format_tools()
                     self.print(
                         f"[orange bold]Changed the image resolution preset to [italic]{name}."
                     )
@@ -390,9 +407,17 @@ Make sure you image prompts are structured as if you're explaining to someone wh
         dialog=None,
         sections=None,
     ):
-
         if sections:
-            self.console.print(sections)
+            sections = [
+                {
+                    "prompt": section["prompt"] + ", " + section["danbooru"],
+                    "x": section["x"],
+                    "y": section["y"],
+                    "width": section["width"],
+                    "height": section["height"],
+                }
+                for section in sections
+            ]
 
         if style:
             style = style.lower()
@@ -415,6 +440,12 @@ Make sure you image prompts are structured as if you're explaining to someone wh
 
             if dialog:
                 self.live.console.print(f'[bold blue]Dialog: [italic]"{dialog}"')
+
+            if sections:
+                for section in sections:
+                    self.console.print(
+                        f"[orange]!{section['width']}x{section['height']}px, ({section['x']}, {section['y']}): {section['prompt']}"
+                    )
 
             update = Group(
                 prompt_mk,
