@@ -97,6 +97,7 @@ Make sure you image prompts are structured as if you're explaining to someone wh
 There's no reason to use this if your image has only one subject / object.
 There's one caveat: the section prompts cannot introduce new ideas/concepts in the image that were not written in the main prompt.
 The size of each section shouldn't be small, just the crude broad coordinates to seperate it from other characters/objects.
+Make sure to seperate the sections from each other enough so that they won't merge, unless the subjects of them are interacting / touching.
 Remember to prompt each section as if it doesn't know what happened in the story, like you're describing the scene to someone.""",
                                 "items": {
                                     "type": "object",
