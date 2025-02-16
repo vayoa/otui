@@ -195,6 +195,8 @@ class TOOL_CALL(TypedDict):
 
 STREAM_RESPONSE = tuple[str, str, Optional[TOOL_CALL]]
 
+_DEFAULT_TIME_FORMAT = "%d-%m-%Y_%H-%M-%S"
+
 
 @dataclass
 class UI:
@@ -217,9 +219,11 @@ class UI:
         self.org_win_size, self.org_win_pos = terminal.size, terminal.topleft
         if self.save_chat and not os.path.exists(self.save_folder):
             os.makedirs(self.save_folder)
-        self.chat_filename = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
+        self.chat_filename = datetime.now().strftime(_DEFAULT_TIME_FORMAT)
 
     def get_messages(self) -> Sequence[Mapping]: ...
+
+    def load_messages(self, file_path: str) -> list[Mapping]: ...
 
     def generate_chat_title(self) -> str: ...
 
@@ -249,7 +253,12 @@ class UI:
             self.chat_filename = new_filename
 
     def on_close(self):
-        self.rename_chat_file()
+        # only if the filename isn't a valid datetime like our default strftime
+        try:
+            datetime.strptime(self.chat_filename, _DEFAULT_TIME_FORMAT)
+            self.rename_chat_file()
+        except ValueError:
+            pass
 
     def stream(
         self, input: str, ai: Optional[str]

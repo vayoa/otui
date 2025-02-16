@@ -161,6 +161,10 @@ Remember to prompt each section as if it doesn't know what happened in the story
     game_mode = False
     resolution_preset = "normal"
 
+    def load_messages(self, file_path: str) -> List[Message]:
+        with open(file_path, "r") as file:
+            return json.load(file)
+
     def format_tools(self):
         res = RESOLUTION_PRESETS[self.resolution_preset]
         formatted_tools = []
@@ -172,7 +176,7 @@ Remember to prompt each section as if it doesn't know what happened in the story
             formatted_tools.append(tool)
 
     def __post_init__(self):
-        self.save_chat = self.args.save_chat
+        self.save_chat = not self.args.ghost_chat
         self.save_folder = self.args.save_folder
 
         self.resolution_preset = self.args.resolution
@@ -257,6 +261,11 @@ Remember to prompt each section as if it doesn't know what happened in the story
         )
         self.gui_thread.start()
         time.sleep(1)
+
+        if self.args.chatfile:
+            self.brain.messages = self.load_messages(self.args.chatfile)
+            self.chat_filename = os.path.basename(self.args.chatfile).split(".json")[0]
+            self.change_system(self.system)
 
     def generate_chat_title(self) -> str:
         return self.brain.quick_format(
@@ -687,6 +696,17 @@ def dir_path(path):
         raise argparse.ArgumentTypeError(f"readable_dir:{path} is not a valid path")
 
 
+def chat_filepath(path):
+    if not path:
+        return None
+    if os.path.isfile(path) and path.endswith(".json"):
+        return path
+    else:
+        raise argparse.ArgumentTypeError(
+            f"readable_dir:{path} is not a valid json file"
+        )
+
+
 def args(**kwargs) -> argparse.Namespace:
     kwargs["prog"] = kwargs.get("prog", "otui-v2")
     kwargs["description"] = kwargs.get("description", "Ollama Terminal User Interface")
@@ -759,9 +779,9 @@ def args(**kwargs) -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "--save_chat",
+        "--ghost_chat",
         action="store_true",
-        help="Determines whether to save the chat messages into a json file.",
+        help="Disables chat saving.",
     )
 
     parser.add_argument(
@@ -770,6 +790,14 @@ def args(**kwargs) -> argparse.Namespace:
         default=r"C:\Users\ew0nd\Documents\otui\v2\chats",
         type=dir_path,
         help="An optional path to save the messages json file to.",
+    )
+
+    parser.add_argument(
+        "--chatfile",
+        "--chat",
+        action="store",
+        type=chat_filepath,
+        help="Path to a JSON chat file to load a previous chat from.",
     )
 
     return parser.parse_args()
