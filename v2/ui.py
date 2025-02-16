@@ -208,6 +208,7 @@ class UI:
     org_win_pos: tuple[int, int] = field(init=False)
     save_chats: bool = field(default=False)
     save_folder: str = field(default="messages")
+    chat_filename: str = field(init=False)
 
     def __post_init__(self):
         terminal = gw.getActiveWindow()
@@ -216,18 +217,39 @@ class UI:
         self.org_win_size, self.org_win_pos = terminal.size, terminal.topleft
         if self.save_chats and not os.path.exists(self.save_folder):
             os.makedirs(self.save_folder)
+        self.chat_filename = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
 
     def get_messages(self) -> Sequence[Mapping]: ...
+
+    def generate_chat_title(self) -> str: ...
 
     def save_messages(self):
         if self.save_chats:
             messages = self.get_messages()
-            file_path = os.path.join(
-                self.save_folder,
-                f"{datetime.now().strftime('%d-%m-%Y_%H-%M-%S')}.json",
-            )
+            file_path = os.path.join(self.save_folder, f"{self.chat_filename}.json")
             with open(file_path, "w") as f:
                 json.dump(messages, f, indent=4)
+
+    def rename_chat_file(self):
+        if self.save_chats:
+            self.save_messages()
+            new_filename = f"{self.generate_chat_title()}.json"
+            # if the file already exists, add a number to the end of the filename
+            if os.path.exists(os.path.join(self.save_folder, new_filename)):
+                i = 1
+                while os.path.exists(
+                    os.path.join(self.save_folder, f"{new_filename}_{i}.json")
+                ):
+                    i += 1
+                new_filename = f"{new_filename}_{i}.json"
+
+            old_file_path = os.path.join(self.save_folder, f"{self.chat_filename}.json")
+            new_file_path = os.path.join(self.save_folder, new_filename)
+            os.rename(old_file_path, new_file_path)
+            self.chat_filename = new_filename
+
+    def on_close(self):
+        self.rename_chat_file()
 
     def stream(
         self, input: str, ai: Optional[str]
@@ -299,8 +321,6 @@ class UI:
             case "console":
                 self.window.resizeTo(1089, 180)
                 self.window.moveTo(422, 845)
-
-    def on_close(self): ...
 
     def handle_params(self, params) -> bool:
         return False

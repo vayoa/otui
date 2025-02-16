@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import json
 from typing import (
     Literal,
     Sequence,
@@ -22,6 +23,7 @@ from groq.types.chat import (
     ChatCompletionChunk,
     ChatCompletionToolParam,
 )
+from groq._types import NOT_GIVEN
 from groq._streaming import Stream
 from rich import print
 from brains import Brain
@@ -93,4 +95,41 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
             stop=None,
             tools=tools,
             tool_choice="auto",
+        )
+
+    def quick_format(self, input: str) -> dict:
+        new_messages = []
+
+        # whenever a message has other attributes besides 'role' and 'content', we'll flatten those attrinbutes and their values into 'content' as strings
+        for message in self.messages:
+            new_message = message
+            if message["role"] not in ["user", "assistant", "system"]:
+                continue
+            if set(message.keys()) != {"role", "content"}:
+                for key, value in message.items():
+                    if key not in ["role", "content"]:
+                        new_message = {
+                            "role": message["role"],
+                            "content": str(message.get("content", ""))
+                            + f"\n{key}: {value}",
+                        }
+            new_messages.append(new_message)
+
+        new_messages.extend(
+            [ChatCompletionUserMessageParam(role="user", content=input)]
+        )
+
+        return json.loads(
+            self.client.chat.completions.create(
+                model=self.model,
+                messages=new_messages,
+                stream=False,
+                temperature=1,
+                max_tokens=1024,
+                top_p=1,
+                stop=None,
+                response_format={"type": "json_object"},
+            )
+            .choices[0]
+            .message.content  # type: ignore
         )

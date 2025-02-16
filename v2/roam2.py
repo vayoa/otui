@@ -256,6 +256,11 @@ Remember to prompt each section as if it doesn't know what happened in the story
         self.gui_thread.start()
         time.sleep(1)
 
+    def generate_chat_title(self) -> str:
+        return self.brain.quick_format(
+            'The user has logged off! Give this story a short, 3-5 word long title. Use the following json schema: {"title": "<YOUR TITLE>"}'
+        )["title"]
+
     def on_close(self):
         self.preview_window.eyes.close()
         super().on_close()
