@@ -206,7 +206,7 @@ class UI:
     window: gw.Win32Window = field(init=False)
     org_win_size: tuple[int, int] = field(init=False)
     org_win_pos: tuple[int, int] = field(init=False)
-    save_chats: bool = field(default=False)
+    save_chat: bool = field(default=False)
     save_folder: str = field(default="messages")
     chat_filename: str = field(init=False)
 
@@ -215,7 +215,7 @@ class UI:
         assert terminal is not None
         self.window = terminal
         self.org_win_size, self.org_win_pos = terminal.size, terminal.topleft
-        if self.save_chats and not os.path.exists(self.save_folder):
+        if self.save_chat and not os.path.exists(self.save_folder):
             os.makedirs(self.save_folder)
         self.chat_filename = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
 
@@ -224,14 +224,14 @@ class UI:
     def generate_chat_title(self) -> str: ...
 
     def save_messages(self):
-        if self.save_chats:
+        if self.save_chat:
             messages = self.get_messages()
             file_path = os.path.join(self.save_folder, f"{self.chat_filename}.json")
             with open(file_path, "w") as f:
                 json.dump(messages, f, indent=4)
 
     def rename_chat_file(self):
-        if self.save_chats:
+        if self.save_chat:
             self.save_messages()
             new_filename = f"{self.generate_chat_title()}.json"
             # if the file already exists, add a number to the end of the filename
