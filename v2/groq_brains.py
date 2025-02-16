@@ -97,7 +97,7 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
             tool_choice="auto",
         )
 
-    def quick_format(self, input: str) -> dict:
+    def quick_format(self, input: str, model=None) -> dict:
         new_messages = []
 
         # whenever a message has other attributes besides 'role' and 'content', we'll flatten those attrinbutes and their values into 'content' as strings
@@ -121,7 +121,7 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
 
         return json.loads(
             self.client.chat.completions.create(
-                model=self.model,
+                model=model or self.model,
                 messages=new_messages,
                 stream=False,
                 temperature=1,

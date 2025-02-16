@@ -269,7 +269,8 @@ Remember to prompt each section as if it doesn't know what happened in the story
 
     def generate_chat_title(self) -> str:
         return self.brain.quick_format(
-            'The user has logged off! Give this story a short, 3-5 word long title. Use the following json schema: {"title": "<YOUR TITLE>"}'
+            'The user has logged off! Give this story a short, 3-5 word long title. Use the following json schema: {"title": "<YOUR TITLE>"}',
+            model=LLM_MODELS["l8"],
         )["title"]
 
     def on_close(self):
