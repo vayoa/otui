@@ -384,6 +384,7 @@ class Eyes:
                 urllib.request.urlopen(
                     f"http://{self.server_address}/interrupt", data=b"{}"
                 )
+                break
             except URLError as e:
                 print(f"Connection error: {e}. Retrying in 5 seconds...")
                 time.sleep(5)  # Wait for 5 seconds before retrying
