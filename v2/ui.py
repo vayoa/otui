@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from argparse import Namespace
+from datetime import datetime
 from threading import Thread
 from typing import (
     Any,
@@ -30,6 +31,8 @@ from prompt_toolkit.key_binding import KeyBindings
 from langchain_community.chat_models import ChatOllama
 import ollama_brains as ollama_brains
 import pygetwindow as gw
+import json
+import os
 
 
 class COMMAND_META(TypedDict):
@@ -203,14 +206,28 @@ class UI:
     window: gw.Win32Window = field(init=False)
     org_win_size: tuple[int, int] = field(init=False)
     org_win_pos: tuple[int, int] = field(init=False)
+    save_chats: bool = field(default=False)
+    save_folder: str = field(default="messages")
 
     def __post_init__(self):
         terminal = gw.getActiveWindow()
         assert terminal is not None
         self.window = terminal
         self.org_win_size, self.org_win_pos = terminal.size, terminal.topleft
+        if self.save_chats and not os.path.exists(self.save_folder):
+            os.makedirs(self.save_folder)
 
     def get_messages(self) -> Sequence[Mapping]: ...
+
+    def save_messages(self):
+        if self.save_chats:
+            messages = self.get_messages()
+            file_path = os.path.join(
+                self.save_folder,
+                f"{datetime.now().strftime('%d-%m-%Y_%H-%M-%S')}.json",
+            )
+            with open(file_path, "w") as f:
+                json.dump(messages, f, indent=4)
 
     def stream(
         self, input: str, ai: Optional[str]
@@ -231,6 +248,7 @@ class UI:
             yield from self.uncensor(
                 response=self.get_messages()[-1]["content"],
             )
+        self.save_messages()
 
     def print(self, text):
         self.console.print(text)
