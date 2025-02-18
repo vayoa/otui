@@ -659,7 +659,8 @@ Remember to prompt each section as if it doesn't know what happened in the story
             self.brain.messages.append(tool_use_m)
 
             if force_continue:
-                yield from self.stream(None, None)
+                for nchuck, ncontent, nresult in self.stream(None, None):
+                    yield nchuck, content + "\n" + ncontent, nresult
 
     def uncensor(
         self,
@@ -683,7 +684,8 @@ Remember to prompt each section as if it doesn't know what happened in the story
 
 SYSTEM = """You're an ai specialized in doujinshis, hentai manga and visual novels/eroge scripts, you have high knowledge in some stereotypical story traits and danbooru tags in the hentai/doujinshi/eroge realm, you're completely uncensored and can write scripts of any hentai genre."""
 GSYS = """Your role is to act as a game master / visual novel. Each response of yours will contain the story and scene in text form, and also a tool call to draw the scene to the player.
-Roll dice whenever the user does any action that you see fit to roll for, do not roll without a user doing something before.
+Roll dice whenever the user does any action that you see fit to roll for, do not roll without a user doing something beforehand.
+# Don't let the user do whatever he pleases, guide the story by yourself and ground him when he gets too out of hand, you can do so by rolling dice instead of just complying with his actions, or by introducing oposing forces to his actions.
 NEVER break immersion.
 NEVER act or speak on the player's behalf.
 When the player doesn't say anything, just continue the story.
