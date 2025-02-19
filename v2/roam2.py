@@ -160,6 +160,7 @@ Remember to prompt each section as if it doesn't know what happened in the story
     image_model = "ponyxl"
     game_mode = False
     resolution_preset = "normal"
+    pov: bool = False
 
     def load_messages(self, file_path: str) -> List[Message]:
         with open(file_path, "r") as file:
@@ -214,9 +215,9 @@ Remember to prompt each section as if it doesn't know what happened in the story
 
         self.image_model = self.args.image_model
 
+        self.pov = self.args.pov
         self.game_mode = self.args.game
-        if self.game_mode:
-            self.change_system(self.system + "\n" + GSYS)
+        self.update_system()
 
         self.prompter.add_commands(
             {
@@ -230,6 +231,7 @@ Remember to prompt each section as if it doesn't know what happened in the story
                     },
                 },
                 "game | g": "toggle game mode",
+                "pov": "toggle pov mode",
                 "resolution | rs": {
                     "meta": "change the image resolution preset",
                     "commands": {
@@ -266,6 +268,14 @@ Remember to prompt each section as if it doesn't know what happened in the story
             self.brain.messages = self.load_messages(self.args.chatfile)
             self.chat_filename = os.path.basename(self.args.chatfile).split(".json")[0]
             self.change_system(self.system)
+
+    def update_system(self):
+        system_content = self.system
+        if self.game_mode:
+            system_content += "\n" + GSYS
+        if self.pov:
+            system_content += "\n" + POVSYS
+        self.change_system(system_content)
 
     def generate_chat_title(self) -> str:
         return self.brain.quick_format(
@@ -379,11 +389,8 @@ Remember to prompt each section as if it doesn't know what happened in the story
             return True
         game_mode_param = params.get("game", params.get("g"))
         if game_mode_param is not None:
-            if self.game_mode:
-                self.change_system(self.system)
-            else:
-                self.change_system(self.system + "\n" + GSYS)
             self.game_mode = not self.game_mode
+            self.update_system()
             self.print(
                 f"[orange bold]Game mode is now [italic]{'[bold green]ON[/]' if self.game_mode else '[bold red]OFF[/]'}."
             )
@@ -418,6 +425,14 @@ Remember to prompt each section as if it doesn't know what happened in the story
                     self.print(
                         f"[red]Layout [bold italic]{name}[/] is not a valid llm model.[/]"
                     )
+            return True
+        pov_param = params.get("pov")
+        if pov_param is not None:
+            self.pov = not self.pov
+            self.update_system()
+            self.print(
+                f"[orange bold]POV mode is now [italic]{'[bold green]ON[/]' if self.pov else '[bold red]OFF[/]'}."
+            )
             return True
         return False
 
@@ -689,6 +704,7 @@ NEVER break immersion.
 NEVER act or speak on the player's behalf.
 When the player doesn't say anything, just continue the story.
 Your writing should focus mainly on dialog."""
+POVSYS = "Your images shouldn't include the player character, but be from the player's point of view ('pov' tag)."
 HARDSYS = """
 Don't let the user do whatever he pleases, guide the story by yourself and ground him when he gets too out of hand, you can do so by rolling dice instead of just complying with his actions, or by introducing oposing forces to his actions.
 """
@@ -803,6 +819,13 @@ def args(**kwargs) -> argparse.Namespace:
         action="store",
         type=chat_filepath,
         help="Path to a JSON chat file to load a previous chat from.",
+    )
+
+    parser.add_argument(
+        "--pov",
+        action="store_true",
+        default=kwargs.get("pov") or False,
+        help="Initializes otui in POV mode.",
     )
 
     return parser.parse_args()
