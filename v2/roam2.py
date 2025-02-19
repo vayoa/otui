@@ -463,6 +463,16 @@ Remember to prompt each section as if it doesn't know what happened in the story
 
         danbooru = danbooru.replace("_", " ")
 
+        new_gender_tags = []
+        for tag in genders.split(","):
+            match = re.match(r"(\d+)(girl|boy|girls|boys)", tag.strip())
+            if match:
+                number, gender = match.groups()
+                new_number = int(number) + 1
+                new_tag = f"{new_number}{gender}"
+                new_gender_tags.append(new_tag)
+        negative_prompt_genders = ", ".join(new_gender_tags)
+
         prompt = f"{prompt}, {danbooru}, {genders}"
         if dialog and "speech_bubble" not in prompt and "speech bubble" not in prompt:
             prompt += ", speech bubble"
@@ -504,7 +514,7 @@ Remember to prompt each section as if it doesn't know what happened in the story
                 ),
                 negative=(
                     (
-                        f"score_6, score_5, score_4, {'censored' if self.nsfw else sfw_neg_prompt}"
+                        f"score_6, score_5, score_4, {negative_prompt_genders + ',' if negative_prompt_genders else ''}{'censored' if self.nsfw else sfw_neg_prompt}"
                     )
                     if is_ponyxl
                     else f"(worst quality, bad anatomy){'' if self.nsfw else ', ' + sfw_neg_prompt}"
@@ -704,7 +714,7 @@ NEVER break immersion.
 NEVER act or speak on the player's behalf.
 When the player doesn't say anything, just continue the story.
 Your writing should focus mainly on dialog."""
-POVSYS = "Your images shouldn't include the player character, but be from the player's point of view ('pov' tag)."
+POVSYS = "Your images shouldn't include the player character, but be from the player's point of view."
 HARDSYS = """
 Don't let the user do whatever he pleases, guide the story by yourself and ground him when he gets too out of hand, you can do so by rolling dice instead of just complying with his actions, or by introducing oposing forces to his actions.
 """
