@@ -449,11 +449,11 @@ Remember to prompt each section as if it doesn't know what happened in the story
         if sections:
             sections = [
                 {
-                    "prompt": section["prompt"] + ", " + section["danbooru"],
-                    "x": section["x"],
-                    "y": section["y"],
-                    "width": section["width"],
-                    "height": section["height"],
+                    "prompt": f'{section["prompt"]}, {section["danbooru"]}',
+                    "x": int(section["x"]),
+                    "y": int(section["y"]),
+                    "width": int(section["width"]),
+                    "height": int(section["height"]),
                 }
                 for section in sections
             ]
