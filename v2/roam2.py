@@ -265,9 +265,9 @@ Remember to prompt each section as if it doesn't know what happened in the story
         time.sleep(1)
 
         if self.args.chatfile:
-            self.brain.messages = self.load_messages(self.args.chatfile)
+            self.brain.add_messages(self.load_messages(self.args.chatfile))
             self.chat_filename = os.path.basename(self.args.chatfile).split(".json")[0]
-            self.change_system(self.system)
+            self.update_system()
 
     def update_system(self):
         system_content = self.system
@@ -275,7 +275,7 @@ Remember to prompt each section as if it doesn't know what happened in the story
             system_content += "\n" + GSYS
         if self.pov:
             system_content += "\n" + POVSYS
-        self.change_system(system_content)
+        self.brain.change_system(system_content)
 
     def generate_chat_title(self) -> str:
         return self.brain.quick_format(
@@ -333,11 +333,6 @@ Remember to prompt each section as if it doesn't know what happened in the story
                     preview_window.moveTo(111, 10)
         super().set_layout(layout)
 
-    def change_system(self, content):
-        self.brain.messages[0] = ChatCompletionSystemMessageParam(
-            role="system", content=content
-        )
-
     def handle_params(self, params) -> bool:
         dialog_param = params.get("dialog", params.get("d"))
         if dialog_param is not None:
@@ -362,7 +357,7 @@ Remember to prompt each section as if it doesn't know what happened in the story
         nsfw_param = params.get("nsfw")
         if nsfw_param is not None:
             self.nsfw = not self.nsfw
-            self.change_system(
+            self.brain.change_system(
                 self.system
                 + (
                     ""
@@ -647,9 +642,7 @@ Remember to prompt each section as if it doesn't know what happened in the story
                 )
                 if content:
                     self.console.print(Markdown(content))
-                    self.brain.messages.append(
-                        {"role": "assistant", "content": content}
-                    )
+                    self.brain.add_messages([{"role": "assistant", "content": content}])
                 yield from self.stream(
                     "Your previous tool call failed for some reason, reply only with a retry tool call.",
                     ai=None,
@@ -677,11 +670,11 @@ Remember to prompt each section as if it doesn't know what happened in the story
             self.brain.clear_last_messages(1)
 
         if content:
-            self.brain.messages.append({"role": "assistant", "content": content})
+            self.brain.add_messages([{"role": "assistant", "content": content}])
 
         if tool_call_m is not None and tool_use_m is not None:
-            self.brain.messages.append(tool_call_m)
-            self.brain.messages.append(tool_use_m)
+            self.brain.add_messages([tool_call_m])
+            self.brain.add_messages([tool_use_m])
 
             if force_continue:
                 for nchuck, ncontent, nresult in self.stream(None, None):
@@ -702,7 +695,9 @@ Remember to prompt each section as if it doesn't know what happened in the story
                 yield chunk, content[len(ai) :], tool_call
 
             self.brain.clear_last_messages(3)
-            self.brain.messages[-1]["content"] = content[len(ai) :]
+            self.brain.update_message_content(
+                content[len(ai) :], len(self.brain.messages) - 1
+            )
 
             yield from self.uncensor(content)
 
