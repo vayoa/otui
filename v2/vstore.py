@@ -60,21 +60,23 @@ class VStore:
         )
 
     def delete_last(self, count, n, keep=None):
-        indexes = [str(i) for i in range(count - n, count - (keep or 0))]
+        indexes = [i for i in range(count - n, count - (keep or 0))]
         ids = self.collection.get(
             where={"index": {"$in": indexes}},  # type: ignore
         )["ids"]
-        self.collection.delete(ids)
-        # update the index and ids of the remaining messages
-        update = (keep or 0) - n
-        r = self.collection.get(where={"index": {"$gt": count - (keep or 0)}})
-        metadatas = r["metadatas"] or []
-        for i, metadata in enumerate(metadatas):
-            metadata["index"] -= update  # type: ignore
+        if ids:
+            self.collection.delete(ids)
+            # update the index and ids of the remaining messages
+            update = (keep or 0) - n
+            r = self.collection.get(where={"index": {"$gte": count - (keep or 0)}})
+            if r["ids"]:
+                metadatas = r["metadatas"] or []
+                for i, metadata in enumerate(metadatas):
+                    metadata["index"] -= update  # type: ignore
 
-        update_ids = r["ids"] or []
+                update_ids = r["ids"] or []
 
-        self.collection.upsert(ids=update_ids, metadatas=metadatas)
+                self.collection.upsert(ids=update_ids, metadatas=metadatas)
 
     def peek_last_ids(self, n, from_index):
         r = self.collection.get(where={"index": {"$lt": from_index}})
