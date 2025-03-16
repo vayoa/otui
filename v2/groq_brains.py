@@ -95,68 +95,70 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
         messages = messages + input
 
         if rag:
-            user_message = [message for message in input if message["role"] == "user"][
-                -1
-            ]["content"]
+            user_messages = [message for message in input if message["role"] == "user"]
+            if user_messages:
+                user_message = user_messages[-1]["content"]
 
-            filtered_messages = [(i, message) for i, message in enumerate(messages)]
-            last_tool_call_indices = [
-                o[0]
-                for o in filtered_messages
-                if "tool_calls" in o[1]  # type: ignore
-                and o[1]["tool_calls"][0]["function"]["name"]  # type: ignore
-                == "generate_scene_image"
-            ][-self.tool_message_limit :]
-            last_tool_call_indices += [i + 1 for i in last_tool_call_indices]
+                filtered_messages = [(i, message) for i, message in enumerate(messages)]
+                last_tool_call_indices = [
+                    o[0]
+                    for o in filtered_messages
+                    if "tool_calls" in o[1]  # type: ignore
+                    and o[1]["tool_calls"][0]["function"]["name"]  # type: ignore
+                    == "generate_scene_image"
+                ][-self.tool_message_limit :]
+                last_tool_call_indices += [i + 1 for i in last_tool_call_indices]
 
-            filtered_messages = [
-                o
-                for o in filtered_messages
-                if ("content" in o[1] and o[1]["role"] != "tool")
-                or (o[0] in last_tool_call_indices)
-            ]
-
-            filtered_count = (
-                self.message_limit
-                - self.tool_message_limit
-                - self.query_message_limit
-                - 1
-            )
-            new_filtered_messages = filtered_messages[-filtered_count:]
-            first_index = new_filtered_messages[0][0] if new_filtered_messages else 0
-            new_filtered_messages = [o[1] for o in new_filtered_messages]
-
-            if first_index > 0:
-                query_messages = self.vstore.query(
-                    user_message,
-                    self.query_message_limit,
-                    first_index,
-                )
-                message = [
-                    {
-                        "role": "user",
-                        "content": "This story is loading from the middle to save memory. We already started the adventure and are in the middle of it.\nHere are some previous messages I picked for you for context:\n"
-                        + "\n".join(
-                            [
-                                f"{message['role']}: {message['content']}"
-                                for message in query_messages
-                            ]
-                        )
-                        + "\nAlso, do not forget to generate an image using your tool like you were ordered! You generated one for every response but I cut it to save memory and only kept the last one."
-                        + "\nWe will now resume our story from our last point.",
-                    }
+                filtered_messages = [
+                    o
+                    for o in filtered_messages
+                    if ("content" in o[1] and o[1]["role"] != "tool")
+                    or (o[0] in last_tool_call_indices)
                 ]
-                new_filtered_messages = message + new_filtered_messages
 
-                new_filtered_messages = [
-                    filtered_messages[0][1]
-                ] + new_filtered_messages
+                filtered_count = (
+                    self.message_limit
+                    - self.tool_message_limit
+                    - self.query_message_limit
+                    - 1
+                )
+                new_filtered_messages = filtered_messages[-filtered_count:]
+                first_index = (
+                    new_filtered_messages[0][0] if new_filtered_messages else 0
+                )
+                new_filtered_messages = [o[1] for o in new_filtered_messages]
 
-            messages: list[Message] = new_filtered_messages  # type: ignore
-            with open(
-                r"C:\Users\ew0nd\Documents\otui\v2\chats\_context_log.json", "w"
-            ) as f:
-                json.dump(messages, f, indent=4)
+                if first_index > 0:
+                    query_messages = self.vstore.query(
+                        user_message,
+                        self.query_message_limit,
+                        first_index,
+                    )
+                    message = [
+                        {
+                            "role": "user",
+                            "content": "This story is loading from the middle to save memory. We already started the adventure and are in the middle of it.\nHere are some previous messages I picked for you for context:\n"
+                            + "\n".join(
+                                [
+                                    f"{message['role']}: {message['content']}"
+                                    for message in query_messages
+                                ]
+                            )
+                            + "\nAlso, do not forget to generate an image using your tool like you were ordered! You generated one for every response but I cut it to save memory and only kept the last one."
+                            + "\nWe will now resume our story from our last point.",
+                        }
+                    ]
+                    new_filtered_messages = message + new_filtered_messages
+
+                    new_filtered_messages = [
+                        filtered_messages[0][1]
+                    ] + new_filtered_messages
+
+                messages: list[Message] = new_filtered_messages  # type: ignore
+                with open(
+                    r"C:\Users\ew0nd\Documents\otui\v2\chats\_context_log.json", "w"
+                ) as f:
+                    json.dump(messages, f, indent=4)
 
         self.add_messages(input)
 
@@ -220,7 +222,7 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
             [ChatCompletionUserMessageParam(role="user", content=input)]
         )
 
-        new_messages = new_messages[self.message_limit :]
+        new_messages = new_messages[-self.message_limit :]
 
         return json.loads(
             self.client.chat.completions.create(
