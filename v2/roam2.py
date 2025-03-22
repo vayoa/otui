@@ -33,6 +33,18 @@ class ToolFunctions(TypedDict):
     continue_after: bool
 
 
+@dataclass
+class DiffusionPreset:
+    positive: str
+    negative: str
+    sfw_negative: str = "(uncensored, nsfw, nude, porn, hentai:1.2)"
+    steps: int = 25
+    sampler_name: str = "dpmpp_2m_sde_gpu"
+    cfg: float = 7
+    clip_skip: int = -2
+    face_detailer: bool = False
+
+
 RESOLUTION_PRESETS = {
     "normal": (1152, 896),
     "highres": (1216, 912),
@@ -47,6 +59,53 @@ LLM_MODELS = {
     "l8": "llama-3.1-8b-instant",
     "mx": "mixtral-8x7b-32768",
     "ds": "deepseek-r1-distill-llama-70b",
+}
+
+DIFFUSION_MODLES = {
+    "anime": {
+        "ponyxl": "waiANINSFWPONYXL_v80.safetensors",
+        "illustrious": "noobaiXLNAIXL_epsilonPred075.safetensors",
+    },
+    "realistic": {
+        "ponyr": "ponyRealism_v22MainVAE.safetensors",
+        "realism": "realismByStableYogi_v40FP16.safetensors",
+        "cyberrealistic": "cyberrealisticPony_v85.safetensors",
+        "alchemist": "alchemistMix_v40.safetensors",
+    },
+}
+
+DIFFUSION_PRESETS = {
+    "waiANINSFWPONYXL_v80.safetensors": DiffusionPreset(
+        positive="score_9, score_8_up, score_7_up, ",
+        negative="score_6, score_5, score_4, ",
+    ),
+    "ponyRealism_v22MainVAE.safetensors": DiffusionPreset(
+        positive="score_9, score_8_up, score_7_up, ",
+        negative="score_6, score_5, score_4",
+        face_detailer=True,
+    ),
+    "noobaiXLNAIXL_epsilonPred075.safetensors": DiffusionPreset(
+        positive="(masterpiece, best quality, newest, absurdres, highres), ",
+        negative="(worst quality, bad anatomy)",
+        cfg=5.5,
+    ),
+    "realismByStableYogi_v40FP16.safetensors": DiffusionPreset(
+        positive="Stable_Yogis_PDXL_Positives, score_9, score_8_up, score_7_up, ",
+        negative="Stable_Yogis_PDXL_Negatives-neg, score_6, score_5, score_4",
+        cfg=4.5,
+        face_detailer=True,
+    ),
+    "alchemistMix_v40.safetensors": DiffusionPreset(
+        positive="(masterpiece, best quality, newest, absurdres, highres, hyper-Detailed, best Quality, amazing quality, realistic, soft lighting), ",
+        negative="(worst quality, bad anatomy)",
+        cfg=5,
+        face_detailer=True,
+    ),
+    "cyberrealisticPony_v85.safetensors": DiffusionPreset(
+        positive="score_9, score_8_up, score_7_up, ",
+        negative="score_6, score_5, score_4, simplified, abstract, unrealistic, impressionistic, low resolution, lowres, bad anatomy, bad hands, missing fingers, worst quality, low quality, normal quality, cartoon, anime, drawing, sketch, illustration, artificial, poor quality",
+        face_detailer=True,
+    ),
 }
 
 
@@ -94,8 +153,7 @@ Make sure you image prompts are structured as if you're explaining to someone wh
                             },
                             "sections": {
                                 "type": "array",
-                                "description": """The section array is where you can specify the location and presence of specific characters / objects in your image.
-There's no reason to use this if your image has only one subject / object.
+                                "description": """The section array is where you can specify the location and presence of specific subjects / objects in your image.
 There's one caveat: the section prompts cannot introduce new ideas/concepts in the image that were not written in the main prompt.
 The size of each section shouldn't be small, just the crude broad coordinates to seperate it from other characters/objects.
 Remember to prompt each section as if it doesn't know what happened in the story, like you're describing the scene to someone.""",
@@ -130,7 +188,7 @@ Remember to prompt each section as if it doesn't know what happened in the story
                                 },
                             },
                         },
-                        "required": ["prompt", "danbooru", "genders"],
+                        "required": ["prompt", "danbooru", "genders", "sections"],
                     },
                 },
                 "type": "function",
@@ -158,6 +216,7 @@ Remember to prompt each section as if it doesn't know what happened in the story
     initial_preview_size: Optional[tuple[int, int]] = field(init=False, default=None)
     nsfw: bool = True
     image_model = "ponyxl"
+    realistic_image_model = "ponyr"
     game_mode = False
     resolution_preset = "normal"
     pov: bool = False
@@ -214,6 +273,7 @@ Remember to prompt each section as if it doesn't know what happened in the story
         ) == set(self.functions.keys())
 
         self.image_model = self.args.image_model
+        self.realistic_image_model = self.args.realistic_image_model
 
         self.pov = self.args.pov
         self.game_mode = self.args.game
@@ -228,6 +288,15 @@ Remember to prompt each section as if it doesn't know what happened in the story
                     "commands": {
                         "ponyxl": "ponyxl (wai-ani-nsfw-ponyxl)",
                         "illustrious": "illustrious (noobai-xl)",
+                    },
+                },
+                "realistic-image-model | rim": {
+                    "meta": "change the realistic image generation model",
+                    "commands": {
+                        "ponyr": "ponyxl (ponyRealism)",
+                        "realism": "ponyxl (realismByStableYogi)",
+                        "cyberrealistic": "ponyxl (cyberrealisticPony)",
+                        "alchemist": "illustrious (alchemistMix)",
                     },
                 },
                 "game | g": "toggle game mode",
@@ -373,15 +442,36 @@ Remember to prompt each section as if it doesn't know what happened in the story
         if image_model_param is not None:
             if image_model_param:
                 name = image_model_param.strip()
-                options = ["ponyxl", "illustrious"]
+                options = DIFFUSION_MODLES["anime"].keys()
                 if name in options:
                     self.image_model = name
-                    self.print(f"[orange bold]Changed image model to [italic]{name}.")
+                    self.print(
+                        f"[orange bold]Changed anime image model to [italic]{name}."
+                    )
                 else:
                     self.print(
-                        f"[red]Layout [bold italic]{name}[/] is not a valid image model.[/]"
+                        f"[red]Layout [bold italic]{name}[/] is not a valid anime image model.[/]"
                     )
             return True
+
+        realistic_image_model_param = params.get(
+            "realistic-image-model", params.get("rim")
+        )
+        if realistic_image_model_param is not None:
+            if realistic_image_model_param:
+                name = realistic_image_model_param.strip()
+                options = DIFFUSION_MODLES["realistic"].keys()
+                if name in options:
+                    self.realistic_image_model = name
+                    self.print(
+                        f"[orange bold]Changed realistic image model to [italic]{name}."
+                    )
+                else:
+                    self.print(
+                        f"[red]Layout [bold italic]{name}[/] is not a valid realistic image model.[/]"
+                    )
+            return True
+
         game_mode_param = params.get("game", params.get("g"))
         if game_mode_param is not None:
             self.game_mode = not self.game_mode
@@ -499,37 +589,72 @@ Remember to prompt each section as if it doesn't know what happened in the story
             self.live.update(update)
 
             is_ponyxl = self.image_model == "ponyxl"
-            sfw_neg_prompt = "(uncensored, nsfw, nude, porn, hentai:1.2)"
+            diffusion_model = DIFFUSION_MODLES[style][self.realistic_image_model] if style == "realistic" else DIFFUSION_MODLES[style][self.image_model]  # type: ignore
+            diffusion_preset = DIFFUSION_PRESETS[diffusion_model]
+            sfw_neg_prompt = diffusion_preset.sfw_negative
             dimensions = RESOLUTION_PRESETS[self.resolution_preset]
+
+            # if sections:
+            #     # create a pil image of the dimensions above
+            #     def generate_image(image_size, rectangles):
+            #         from PIL import Image, ImageDraw, ImageFont
+
+            #         w, h = image_size
+            #         image = Image.new("RGB", (w, h), "white")
+            #         draw = ImageDraw.Draw(image)
+
+            #         # Predefined colors
+            #         colors = [
+            #             "red",
+            #             "green",
+            #             "blue",
+            #             "orange",
+            #             "purple",
+            #             "cyan",
+            #             "magenta",
+            #             "yellow",
+            #         ]
+
+            #         # Try to load a default font
+            #         try:
+            #             font = ImageFont.truetype("arial.ttf", 20)
+            #         except:
+            #             font = ImageFont.load_default()
+
+            #         for i, (rw, rh, x, y) in enumerate(rectangles):
+            #             color = colors[i % len(colors)]  # Cycle through colors
+            #             draw.rectangle(
+            #                 [x, y, x + rw, y + rh], outline="black", fill=color, width=2
+            #             )
+
+            #             # Calculate text position
+            #             text = str(i)
+            #             text_w, text_h = font.getbbox(text)[
+            #                 2:
+            #             ]  # Use getbbox instead of textsize
+            #             text_x = x + (rw - text_w) // 2
+            #             text_y = y + (rh - text_h) // 2
+
+            #             draw.text((text_x, text_y), text, fill="black", font=font)
+
+            #         image.show()
+
+            #     generate_image(
+            #         dimensions,
+            #         [(s["width"], s["height"], s["x"], s["y"]) for s in sections],
+            #     )
+
             self.preview_window.preview(
-                (
-                    f"score_9, score_8_up, score_7_up, {prompt}"
-                    if is_ponyxl
-                    else f"(masterpiece, best quality, newest, absurdres, highres), {prompt}"
-                ),
-                negative=(
-                    (
-                        f"score_6, score_5, score_4, {negative_prompt_genders + ',' if negative_prompt_genders else ''}{'censored' if self.nsfw else sfw_neg_prompt}"
-                    )
-                    if is_ponyxl
-                    else f"(worst quality, bad anatomy){'' if self.nsfw else ', ' + sfw_neg_prompt}"
-                ),
+                f"{diffusion_preset.positive}{prompt}",
+                negative=f"{diffusion_preset.negative}{negative_prompt_genders + ',' if negative_prompt_genders else ', '}{'censored' if self.nsfw else sfw_neg_prompt}",
                 dimensions=dimensions,
-                steps=25,
-                sampler_name="dpmpp_2m_sde_gpu",
-                checkpoint=(
-                    "ponyRealism_v22MainVAE.safetensors"
-                    if style == "realistic"
-                    else (
-                        "waiANINSFWPONYXL_v80.safetensors"
-                        if is_ponyxl
-                        else "noobaiXLNAIXL_epsilonPred075.safetensors"
-                    )
-                ),
-                cfg=7 if is_ponyxl else 5.5,
-                clip_skip=-2,
+                steps=diffusion_preset.steps,
+                sampler_name=diffusion_preset.sampler_name,
+                checkpoint=diffusion_model,
+                cfg=diffusion_preset.cfg,
+                clip_skip=diffusion_preset.clip_skip,
                 dialog=dialog,
-                face_detailer=True if style == "realistic" else False,
+                face_detailer=diffusion_preset.face_detailer,
                 sections=sections,
             )
             time.sleep(2)
@@ -783,8 +908,17 @@ def args(**kwargs) -> argparse.Namespace:
         "--im",
         action="store",
         default="ponyxl",
-        choices=["ponyxl", "illustrious"],
-        help="The model used for image generation.",
+        choices=DIFFUSION_MODLES["anime"].keys(),
+        help="The model used for anime image generation.",
+    )
+
+    parser.add_argument(
+        "--realistic_image_model",
+        "--rim",
+        action="store",
+        default="ponyr",
+        choices=DIFFUSION_MODLES["realistic"].keys(),
+        help="The model used for realistic generation.",
     )
 
     parser.add_argument(
