@@ -588,7 +588,6 @@ Remember to prompt each section as if it doesn't know what happened in the story
             )
             self.live.update(update)
 
-            is_ponyxl = self.image_model == "ponyxl"
             diffusion_model = DIFFUSION_MODLES[style][self.realistic_image_model] if style == "realistic" else DIFFUSION_MODLES[style][self.image_model]  # type: ignore
             diffusion_preset = DIFFUSION_PRESETS[diffusion_model]
             sfw_neg_prompt = diffusion_preset.sfw_negative
