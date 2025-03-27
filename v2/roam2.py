@@ -59,6 +59,7 @@ LLM_MODELS = {
     "l8": "llama-3.1-8b-instant",
     "mx": "mixtral-8x7b-32768",
     "ds": "deepseek-r1-distill-llama-70b",
+    "qwen": "qwen-2.5-32b",
 }
 
 DIFFUSION_MODLES = {
