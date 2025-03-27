@@ -261,7 +261,11 @@ class UI:
             pass
 
     def stream(
-        self, input: str, ai: Optional[str]
+        self,
+        input: str,
+        ai: Optional[str],
+        ai_fixup: bool = False,
+        keep_ai_prefix: bool = True,
     ) -> Generator[STREAM_RESPONSE, None, None]: ...
 
     def uncensor(

@@ -48,6 +48,7 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
     tool_message_limit: int = 1
     query_message_limit: int = 4
     vstore: VStore = field(init=False, default_factory=VStore)
+    latest_rag_context: Optional[list[Message]] = None
 
     @overload
     def chat(
@@ -155,10 +156,11 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
                     ] + new_filtered_messages
 
                 messages: list[Message] = new_filtered_messages  # type: ignore
+                self.latest_rag_context = messages
                 with open(
                     r"C:\Users\ew0nd\Documents\otui\v2\chats\_context_log.json", "w"
                 ) as f:
-                    json.dump(messages, f, indent=4)
+                    json.dump(self.latest_rag_context, f, indent=4)
 
         self.add_messages(input)
 
