@@ -55,7 +55,9 @@ RESOLUTION_PRESETS = {
 
 LLM_MODELS = {
     "l70": "llama-3.3-70b-versatile",
+    "l70sd": "llama-3.3-70b-specdec",
     "l70st": "llama3-70b-8192",
+    "l70sp": "llama-3.1-8b-instant",
     "l8": "llama-3.1-8b-instant",
     "mx": "mixtral-8x7b-32768",
     "ds": "deepseek-r1-distill-llama-70b",
