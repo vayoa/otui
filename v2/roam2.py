@@ -158,6 +158,7 @@ Make sure you image prompts are structured as if you're explaining to someone wh
                                 "type": "array",
                                 "description": """The section array is where you can specify the location and presence of specific subjects / objects in your image.
 There's one caveat: the section prompts cannot introduce new ideas/concepts in the image that were not written in the main prompt.
+Make sure to separate the size and position of your sections so that they won't overlap unless they must. If you won't do so the subjects may combine and give an undesirable result.
 The size of each section shouldn't be small, just the crude broad coordinates to seperate it from other characters/objects.
 Remember to prompt each section as if it doesn't know what happened in the story, like you're describing the scene to someone.""",
                                 "items": {
