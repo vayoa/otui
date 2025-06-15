@@ -112,14 +112,57 @@
       padding:1rem 1.3rem;backdrop-filter:var(--blur);box-shadow:var(--shadow)
     }
     .attachments{display:flex;align-items:center;gap:11px;margin-bottom:.75rem}
-    .thumb{width:220px;height:28px;flex:0 0 220px;border-radius:7px;object-fit:cover;cursor:pointer;
-      border:1px solid var(--stroke);backdrop-filter:var(--blur);box-shadow:var(--shadow);
+        .thumb {
+      width: 220px; height: 28px; flex: 0 0 220px; border-radius: 7px; cursor: pointer;
+      border: 1px solid var(--stroke); backdrop-filter: var(--blur); box-shadow: var(--shadow);
       transition: transform 0.2s ease, box-shadow 0.2s ease;
+      position: relative; /* Crucial for containing the img and placeholder */
+      overflow: hidden;   /* Hides the parts of the image wiping in */
     }
+
+    /* NEW: Add the shimmer placeholder background to the wrapper */
+    .thumb::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to right, 
+        rgba(255,255,255,0) 0%, 
+        rgba(255,255,255,0.08) 50%, 
+        rgba(255,255,255,0) 100%);
+      background-size: 440px 100%; /* Make it wider than the element for the sweep effect */
+      animation: shimmer 1.5s infinite linear;
+      transition: opacity 0.3s ease;
+    }
+    
     .thumb:hover {
       transform: translateY(-2px);
       box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
     }
+
+    /* NEW: Style the actual <img> tag inside the wrapper */
+    .thumb img {
+      position: absolute; /* Position it on top of the placeholder */
+      inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      /* Image starts fully clipped and invisible */
+      clip-path: inset(0 100% 0 0);
+      opacity: 0;
+      transition: clip-path 0.6s ease-out, opacity 0.4s ease-in;
+    }
+    
+    /* NEW: When JS adds .loaded to the wrapper... */
+    .thumb.loaded::before {
+      /* ...fade out the placeholder shimmer */
+      opacity: 0;
+    }
+    .thumb.loaded img {
+      /* ...wipe in and fade in the image */
+      clip-path: inset(0 0 0 0);
+      opacity: 1;
+    }
+
+    
     .pill{
       min-width:135px;padding:0 8px;display:flex;align-items:center;justify-content:center;
   
@@ -205,6 +248,7 @@
       user-select: none;
     }
 
+
     /* bigger, invisible click‐area around the resize handle */
     .resize-handle {
       position: absolute;
@@ -248,19 +292,24 @@
       100% { opacity:1; filter:blur(0)    brightness(1);  transform:none; }
     }
     @keyframes slideLeftIn  {
-      0%   { opacity:0; filter:blur(4px); transform:translateX(-28px); }
-      100% { opacity:1; filter:blur(0);   transform:none; }
+      0%   { opacity:0; filter:blur(4px), drop-shadow(0 10px 20px rgba(0,0,0,0.5)); transform:translateX(-28px); }
+      100% { opacity:1; filter:blur(0), drop-shadow(0 4px 12px rgba(0,0,0,0.5));   transform:none; }
     }
     @keyframes slideRightIn {
-      0%   { opacity:0; filter:blur(4px); transform:translateX( 28px); }
-      100% { opacity:1; filter:blur(0);   transform:none; }
+      0%   { opacity:0; filter:blur(4px), drop-shadow(0 10px 20px rgba(0,0,0,0.5)); transform:translateX( 28px); }
+      100% { opacity:1; filter:blur(0), drop-shadow(0 4px 12px rgba(0,0,0,0.5));   transform:none; }
     }
 
     /* smooth bottom-padding change when game-mode toggles */
     .messages{ transition:padding-bottom .4s cubic-bezier(.22,.61,.36,1); }
 
     /* thumb reveal */
-    @keyframes thumbReveal { from{clip-path:inset(0 100% 0 0)} to{clip-path:inset(0 0 0 0)} }
+    @keyframes thumbReveal { from{clip-path:inset(0 100% 0 0); opacity:0; filter:blur(30px)} to{clip-path:inset(0 0 0 0); opacity:1; filter:blur(0)}}
+
+    @keyframes shimmer {
+      0%   { background-position: -440px 0; }
+      100% { background-position: 440px 0;  }
+    }
 
 
     /* ───────── prompt bar ───────── */
@@ -398,9 +447,19 @@
 
       const att=document.createElement('div'); att.className='attachments';
       if(img){
-        const th=document.createElement('img');
-        th.className='thumb'; th.src=img; th.onclick=()=>openViewer(img, th);
-        att.appendChild(th);
+        // 1. Create a wrapper DIV instead of an IMG
+        const wrapper = document.createElement('div');
+        wrapper.className = 'thumb'; // We'll rename this class in CSS
+        wrapper.onclick = () => openViewer(img, wrapper);
+        
+        // 2. Create the actual image element to go inside
+        const th = document.createElement('img');
+        th.src = img;
+        
+        // 3. Append the image to the wrapper, then the wrapper to the attachments
+        wrapper.appendChild(th);
+        att.appendChild(wrapper);
+
         if(!gallery.includes(img)) gallery.push(img);
       }
       if(from==='assistant'){
@@ -437,10 +496,27 @@
 
         // animate the container itself:
         if (el.classList.contains('thumb')) {
-          // slide the card in, **then** wipe the image
-          el.style.animation =
-            `slideIn .3s ease-out forwards var(--base-delay), `+
-            `thumbReveal .6s ease-out forwards calc(var(--base-delay) + .3s)`;
+          /* ① kick off the card’s slide-in straight away */
+          el.style.animation = `slideIn .3s ease-out forwards var(--base-delay)`;
+
+          /* ② when the bitmap is ready, wait for the slide-in to finish,
+               then add .loaded so the clip-path can animate */
+          const SLIDE_MS = 50; // duration of @keyframes slideIn
+          
+          // The element `el` is the wrapper div. We need the image INSIDE it.
+          const imageEl = el.querySelector('img');
+
+          const reveal = () =>
+            setTimeout(() => // wait the 300 ms…
+              requestAnimationFrame(() => el.classList.add('loaded')) // …then one frame
+            , SLIDE_MS);
+
+          if (imageEl.complete) {
+            // image came from cache
+            reveal();
+          } else {
+            imageEl.addEventListener('load', reveal, { once: true });
+          }
         } else {
           el.style.animation = `slideIn .3s ease-out forwards var(--base-delay)`;
         }
@@ -482,102 +558,108 @@
 
     /* open / update viewer */
     function openViewer(src, fromThumb = null) {
-      // --- PART 1: Creation and Opening Animation ---
-      if (!viewer) {
-        viewer = qs('#viewer-template').cloneNode(true);
-        viewer.id = '';
-        viewer.style.display = '';
-        viewer.originThumb = fromThumb;
-        chat.appendChild(viewer);
-        addViewerHandlers();
+      // ——— PART 0: Preload so we don't blank out ———
+      const preload = new Image();
+      preload.src = src;
+      preload.onload = () => {
 
-        // Restore previous size and position
-        if (viewerState.width) {
-          viewer.style.width = viewerState.width;
-          viewer.style.height = viewerState.height;
-          viewer.style.top = viewerState.top;
-          viewer.style.left = viewerState.left;
+        // ——— PART 1: Create & animate the viewer open (unchanged) ———
+        if (!viewer) {
+          viewer = qs('#viewer-template').cloneNode(true);
+          viewer.id = '';
+          viewer.style.display = '';
+          viewer.originThumb = fromThumb;
+          chat.appendChild(viewer);
+          addViewerHandlers();
+
+          // Restore previous size and position
+          if (viewerState.width) {
+            viewer.style.width  = viewerState.width;
+            viewer.style.height = viewerState.height;
+            viewer.style.top    = viewerState.top;
+            viewer.style.left   = viewerState.left;
+          }
+          
+          if (fromThumb) {
+              if (body.classList.contains('game')) viewer.classList.add('full');
+              // 0️⃣  Measure where we are and where we need to start
+              const final = viewer.getBoundingClientRect();
+              const thumb = fromThumb.getBoundingClientRect();
+
+              const scaleX = thumb.width  / final.width;
+              const scaleY = thumb.height / final.height;
+              const dx     = thumb.left - final.left;
+              const dy     = thumb.top  - final.top;
+
+              // 1️⃣  Jump instantly on top of the thumbnail **without** transitions
+              viewer.classList.add('no-transition');
+              viewer.style.transformOrigin = 'top left';
+              viewer.style.opacity   = '0';
+              viewer.style.transform = `translate(${dx}px,${dy}px) scale(${scaleX},${scaleY})`;
+              void viewer.offsetWidth;
+              viewer.classList.remove('no-transition');
+
+              // 2️⃣  Next frame: animate to full size & full opacity
+              requestAnimationFrame(() => {
+                viewer.style.opacity   = '1';
+                viewer.style.transform = 'none';
+              });
+
+              // After the transition, clean up and adjust layout.
+              viewer.addEventListener(
+                'transitionend',
+                () => {
+                  viewer.style.removeProperty('transform');
+                  setBottomPadding();
+                  scrollLatest();
+                },
+                { once: true }
+              );
+            } else {
+              // No thumbnail → simple fade-in
+              viewer.style.opacity = '0';
+              requestAnimationFrame(() => (viewer.style.opacity = '1'));
+            }
         }
 
-        /* ⬇⬇⬇  ✱✱ FIXED ANIMATION START ✱✱ ⬇⬇⬇ */
-        if (fromThumb) {
-          if (body.classList.contains('game')) viewer.classList.add('full');
-          // 0️⃣  Measure where we are and where we need to start
-          const final = viewer.getBoundingClientRect();
-          const thumb = fromThumb.getBoundingClientRect();
+        // ——— PART 2: Swap in the new image with animation ———
+        const imgEl = qs('img', viewer);
+        if (imgEl.src !== src) {
+          // hide old
+          imgEl.style.opacity = 0;
+          const newThumb = qsa('.thumb').find(t => t.src === src);
+          if (newThumb) viewer.originThumb = newThumb; // Update origin for close animation
+          // kick off onload animation
+          imgEl.onload = () => {
+            // determine slide direction
+            const newIdx = gallery.indexOf(src);
+            const dir = lastViewerIndex === -1 ? 0
+                      : (newIdx - lastViewerIndex + gallery.length) % gallery.length === 1 ? 1
+                      : -1;
+            lastViewerIndex = newIdx;
 
-          const scaleX = thumb.width  / final.width;
-          const scaleY = thumb.height / final.height;
-          const dx     = thumb.left - final.left;
-          const dy     = thumb.top  - final.top;
+            // pick animation
+            const anim = dir === 1 ? 'slideRightIn'
+                      : dir === -1 ? 'slideLeftIn'
+                      : 'blurFade';
+            imgEl.style.animation = `${anim} .45s ease-out`;
+            imgEl.style.opacity   = 1;
+            imgEl.addEventListener('animationend',
+              () => imgEl.style.animation = '', { once: true });
+          };
 
-          // 1️⃣  Jump instantly on top of the thumbnail **without** transitions
-          viewer.classList.add('no-transition');
-          viewer.style.transformOrigin = 'top left';
-          viewer.style.opacity   = '0';
-          viewer.style.transform = `translate(${dx}px,${dy}px) scale(${scaleX},${scaleY})`;
-          void viewer.offsetWidth;
-          viewer.classList.remove('no-transition');
-
-          // 2️⃣  Next frame: animate to full size & full opacity
-          requestAnimationFrame(() => {
-            viewer.style.opacity   = '1';
-            viewer.style.transform = 'none';
-          });
-
-          // After the transition, clean up and adjust layout.
-          viewer.addEventListener(
-            'transitionend',
-            () => {
-              viewer.style.removeProperty('transform');
-              setBottomPadding();
-              scrollLatest();
-            },
-            { once: true }
-          );
-        } else {
-          // No thumbnail → simple fade-in
-          viewer.style.opacity = '0';
-          requestAnimationFrame(() => (viewer.style.opacity = '1'));
+          // swap source—now instantly available from cache
+          imgEl.src = src;
         }
-        /* ⬆⬆⬆  ✱✱ END OF FIX ✱✱ ⬆⬆⬆ */
-      }
 
-      // --- PART 2: Content Update (runs on open and for next/prev) ---
-      const imgEl = qs('img', viewer);
-      if(imgEl.src !== src){
-        imgEl.style.opacity=0;
-        const newThumb = qsa('.thumb').find(t => t.src === src);
-        if (newThumb) viewer.originThumb = newThumb; // Update origin for close animation
-        imgEl.onload = () => {
-          // pick the right animation
-          const a = dir ===  1 ? 'slideRightIn'
-                  : dir === -1 ? 'slideLeftIn'
-                  : 'blurFade';
-          imgEl.style.animation = `${a} .45s ease-out`;
-          imgEl.style.opacity = 1;
-          imgEl.addEventListener('animationend',()=>imgEl.style.animation='',{once:true});
-        };
-        imgEl.src=src;
-      }
-
-      const indicator = qs('.indicator', viewer);
-      if(indicator){
+        // update indicator
+        const ind = qs('.indicator', viewer);
         const idx = gallery.indexOf(src);
-        indicator.textContent = `${idx+1}/${gallery.length}`;
-      }
+        if (ind) ind.textContent = `${idx+1}/${gallery.length}`;
 
-      // work out slide direction (–1 = left, +1 = right, 0 = first image)
-      const newIdx = gallery.indexOf(src);
-      const dir = lastViewerIndex === -1 ? 0
-                : (newIdx - lastViewerIndex + gallery.length) % gallery.length === 1 ? 1
-                : -1;
-      lastViewerIndex = newIdx;          // remember for the next turn
-      
-      // If the viewer is already visible, ensure it's sized correctly.
-      if (viewer.style.opacity === '1') {
-          fitViewer();
-      }
+        // ensure full-mode sizing if needed
+        if (viewer.style.opacity === '1') fitViewer();
+      };
     }
 
     function addViewerHandlers(){

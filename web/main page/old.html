@@ -242,6 +242,27 @@
       box-shadow: none !important;
     }
 
+    /* ─── viewer image transition helpers ─── */
+    @keyframes blurFade {
+      0%   { opacity:0; filter:blur(6px)  brightness(.9); transform:scale(1.02); }
+      100% { opacity:1; filter:blur(0)    brightness(1);  transform:none; }
+    }
+    @keyframes slideLeftIn  {
+      0%   { opacity:0; filter:blur(4px); transform:translateX(-28px); }
+      100% { opacity:1; filter:blur(0);   transform:none; }
+    }
+    @keyframes slideRightIn {
+      0%   { opacity:0; filter:blur(4px); transform:translateX( 28px); }
+      100% { opacity:1; filter:blur(0);   transform:none; }
+    }
+
+    /* smooth bottom-padding change when game-mode toggles */
+    .messages{ transition:padding-bottom .4s cubic-bezier(.22,.61,.36,1); }
+
+    /* thumb reveal */
+    @keyframes thumbReveal { from{clip-path:inset(0 100% 0 0)} to{clip-path:inset(0 0 0 0)} }
+
+
     /* ───────── prompt bar ───────── */
     #prompt-form{flex:0 0 auto;height:var(--prompt-bar-h);display:flex;align-items:center;gap:.8rem;
       padding:0 var(--chat-pad-x);margin-bottom:2rem}
@@ -302,6 +323,9 @@
     
     // Store last viewer size and position
     let viewerState = {};
+
+    // for slide-direction detection
+    let lastViewerIndex = -1;
     
     const SPACER  = css('--viewer-spacer');
     const GAP     = css('--gap');
@@ -412,7 +436,14 @@
         el.style.setProperty('--base-delay', `${baseDelay}s`);
 
         // animate the container itself:
-        el.style.animation = `slideIn 0.3s ease-out forwards var(--base-delay)`;
+        if (el.classList.contains('thumb')) {
+          // slide the card in, **then** wipe the image
+          el.style.animation =
+            `slideIn .3s ease-out forwards var(--base-delay), `+
+            `thumbReveal .6s ease-out forwards calc(var(--base-delay) + .3s)`;
+        } else {
+          el.style.animation = `slideIn .3s ease-out forwards var(--base-delay)`;
+        }
 
         el.addEventListener('animationend', () => {
           // leave it at the final keyframe (opacity:1, transform:none), but
@@ -512,14 +543,21 @@
         /* ⬆⬆⬆  ✱✱ END OF FIX ✱✱ ⬆⬆⬆ */
       }
 
-
       // --- PART 2: Content Update (runs on open and for next/prev) ---
       const imgEl = qs('img', viewer);
       if(imgEl.src !== src){
         imgEl.style.opacity=0;
         const newThumb = qsa('.thumb').find(t => t.src === src);
         if (newThumb) viewer.originThumb = newThumb; // Update origin for close animation
-        imgEl.onload=()=>imgEl.style.opacity=1;
+        imgEl.onload = () => {
+          // pick the right animation
+          const a = dir ===  1 ? 'slideRightIn'
+                  : dir === -1 ? 'slideLeftIn'
+                  : 'blurFade';
+          imgEl.style.animation = `${a} .45s ease-out`;
+          imgEl.style.opacity = 1;
+          imgEl.addEventListener('animationend',()=>imgEl.style.animation='',{once:true});
+        };
         imgEl.src=src;
       }
 
@@ -528,6 +566,13 @@
         const idx = gallery.indexOf(src);
         indicator.textContent = `${idx+1}/${gallery.length}`;
       }
+
+      // work out slide direction (–1 = left, +1 = right, 0 = first image)
+      const newIdx = gallery.indexOf(src);
+      const dir = lastViewerIndex === -1 ? 0
+                : (newIdx - lastViewerIndex + gallery.length) % gallery.length === 1 ? 1
+                : -1;
+      lastViewerIndex = newIdx;          // remember for the next turn
       
       // If the viewer is already visible, ensure it's sized correctly.
       if (viewer.style.opacity === '1') {
