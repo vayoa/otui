@@ -164,8 +164,18 @@
       border:1px solid var(--stroke);border-radius:7px;padding:11.5px;
       box-shadow:var(--shadow);overflow:hidden;z-index:25;
       cursor: grab;
-      transition: transform 0.2s ease-in-out;
+
+       transition:
+        transform .4s cubic-bezier(.22,.61,.36,1),
+        opacity  .3s,
+        top      .4s cubic-bezier(.22,.61,.36,1),
+        left     .4s cubic-bezier(.22,.61,.36,1),
+        width    .4s cubic-bezier(.22,.61,.36,1),
+        height   .4s cubic-bezier(.22,.61,.36,1);
     }
+
+    .viewer.no-transition { transition:none!important }
+
     .viewer.full{pointer-events:none;}
     .viewer.full footer,
     .viewer.full footer *,
@@ -174,7 +184,7 @@
     .viewer img{
       width:100%;height:100%;object-fit:contain;border-radius:7px;pointer-events:none;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
-      filter: drop-shadow(0 0 4px rgba(255,255,255,0.5));
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
     }
     .viewer footer{
       position:absolute;bottom:11.5px;left:11.5px;height:29px;
@@ -200,17 +210,17 @@
       position: absolute;
       right: 0;
       bottom: 0;
-      width: 20px;
-      height: 20px;
+      width: 36px;
+      height: 36px;
       cursor: se-resize;
     }
     .resize-handle::after {
       content: '';
       position: absolute;
-      right: 4px;
-      bottom: 4px;
-      width: 14px;
-      height: 14px;
+      right: 6px;
+      bottom: 6px;
+      width: 16px;
+      height: 16px;
       border-right: 1px solid var(--stroke);
       border-bottom: 1px solid var(--stroke);
     }
@@ -289,6 +299,10 @@
     const qs =(s,p=document)=>p.querySelector(s);
     const qsa=(s,p=document)=>[...p.querySelectorAll(s)];
     const css=n=>parseInt(getComputedStyle(document.documentElement).getPropertyValue(n));
+    
+    // Store last viewer size and position
+    let viewerState = {};
+    
     const SPACER  = css('--viewer-spacer');
     const GAP     = css('--gap');
     const RESERVE = css('--reserve');
@@ -361,7 +375,7 @@
       const att=document.createElement('div'); att.className='attachments';
       if(img){
         const th=document.createElement('img');
-        th.className='thumb'; th.src=img; th.onclick=()=>openViewer(img);
+        th.className='thumb'; th.src=img; th.onclick=()=>openViewer(img, th);
         att.appendChild(th);
         if(!gallery.includes(img)) gallery.push(img);
       }
@@ -427,31 +441,98 @@
       }
     }
 
+    function scrubInlineTransform(el) {
+      el.addEventListener('transitionend', e => {
+        if (e.propertyName === 'transform') {
+          el.style.removeProperty('transform');   // <- releases :hover & .dragging
+        }
+      });
+    }
+
     /* open / update viewer */
-    function openViewer(src){
-      if(!viewer){
-        viewer=qs('#viewer-template').cloneNode(true);
-        viewer.id=''; viewer.style.display='';
+    function openViewer(src, fromThumb = null) {
+      // --- PART 1: Creation and Opening Animation ---
+      if (!viewer) {
+        viewer = qs('#viewer-template').cloneNode(true);
+        viewer.id = '';
+        viewer.style.display = '';
+        viewer.originThumb = fromThumb;
         chat.appendChild(viewer);
         addViewerHandlers();
+
+        // Restore previous size and position
+        if (viewerState.width) {
+          viewer.style.width = viewerState.width;
+          viewer.style.height = viewerState.height;
+          viewer.style.top = viewerState.top;
+          viewer.style.left = viewerState.left;
+        }
+
+        /* ⬇⬇⬇  ✱✱ FIXED ANIMATION START ✱✱ ⬇⬇⬇ */
+        if (fromThumb) {
+          if (body.classList.contains('game')) viewer.classList.add('full');
+          // 0️⃣  Measure where we are and where we need to start
+          const final = viewer.getBoundingClientRect();
+          const thumb = fromThumb.getBoundingClientRect();
+
+          const scaleX = thumb.width  / final.width;
+          const scaleY = thumb.height / final.height;
+          const dx     = thumb.left - final.left;
+          const dy     = thumb.top  - final.top;
+
+          // 1️⃣  Jump instantly on top of the thumbnail **without** transitions
+          viewer.classList.add('no-transition');
+          viewer.style.transformOrigin = 'top left';
+          viewer.style.opacity   = '0';
+          viewer.style.transform = `translate(${dx}px,${dy}px) scale(${scaleX},${scaleY})`;
+          void viewer.offsetWidth;
+          viewer.classList.remove('no-transition');
+
+          // 2️⃣  Next frame: animate to full size & full opacity
+          requestAnimationFrame(() => {
+            viewer.style.opacity   = '1';
+            viewer.style.transform = 'none';
+          });
+
+          // After the transition, clean up and adjust layout.
+          viewer.addEventListener(
+            'transitionend',
+            () => {
+              viewer.style.removeProperty('transform');
+              setBottomPadding();
+              scrollLatest();
+            },
+            { once: true }
+          );
+        } else {
+          // No thumbnail → simple fade-in
+          viewer.style.opacity = '0';
+          requestAnimationFrame(() => (viewer.style.opacity = '1'));
+        }
+        /* ⬆⬆⬆  ✱✱ END OF FIX ✱✱ ⬆⬆⬆ */
       }
-      const imgEl = qs('img',viewer);
-      if(imgEl.src!==src){
+
+
+      // --- PART 2: Content Update (runs on open and for next/prev) ---
+      const imgEl = qs('img', viewer);
+      if(imgEl.src !== src){
         imgEl.style.opacity=0;
+        const newThumb = qsa('.thumb').find(t => t.src === src);
+        if (newThumb) viewer.originThumb = newThumb; // Update origin for close animation
         imgEl.onload=()=>imgEl.style.opacity=1;
         imgEl.src=src;
       }
-      // update the "x / n" indicator
+
       const indicator = qs('.indicator', viewer);
       if(indicator){
         const idx = gallery.indexOf(src);
         indicator.textContent = `${idx+1}/${gallery.length}`;
       }
-
-      if(body.classList.contains('game')) viewer.classList.add('full');
-      fitViewer();
-      setBottomPadding();
-      scrollLatest();
+      
+      // If the viewer is already visible, ensure it's sized correctly.
+      if (viewer.style.opacity === '1') {
+          fitViewer();
+      }
     }
 
     function addViewerHandlers(){
@@ -475,13 +556,15 @@
 
       let drag=false,sx=0,sy=0;
       viewer.addEventListener('mousedown', e=>{
-        if(viewer.classList.contains('full')||qs('footer',viewer).contains(e.target)) return;
+        const overHandle = e.target.closest('.resize-handle');
+        if(viewer.classList.contains('full')||qs('footer',viewer).contains(e.target)||overHandle) return;
         drag=true; sx=e.clientX-viewer.offsetLeft; sy=e.clientY-viewer.offsetTop;
         viewer.classList.add('dragging');
       });
       window.addEventListener('mouseup', ()=>{
         if(drag){
           drag=false;
+
           viewer.classList.remove('dragging');
         }
       });
@@ -513,23 +596,65 @@
       handle.addEventListener('mouseleave', ()=>viewer.classList.remove('no-hover-animation'));
     }
 
-    function closeViewer(){
-      if(!viewer) return;
-      window.removeEventListener('keydown',viewer._keys);
-      viewer.remove(); viewer=null;
-      setBottomPadding(); scrollLatest();
+    function closeViewer() {
+      if (!viewer) return;
+
+      // Determine if we're closing from game mode
+      const isGameMode = viewer.classList.contains('full');
+
+      // Save last size and position only if not in game mode
+      if (!isGameMode) {
+        viewerState.width = viewer.style.width || `${viewer.getBoundingClientRect().width}px`;
+        viewerState.height = viewer.style.height || `${viewer.getBoundingClientRect().height}px`;
+        viewerState.top = viewer.style.top || `${viewer.getBoundingClientRect().top}px`;
+        viewerState.left = viewer.style.left || `${viewer.getBoundingClientRect().left}px`;
+      }
+
+      // Exit game mode
+      body.classList.remove('game');
+
+      window.removeEventListener('keydown', viewer._keys);
+
+      // Animate back to the thumbnail if it exists and is visible
+      const fromThumb = viewer.originThumb;
+      if (fromThumb) {
+        const thumbRect = fromThumb.getBoundingClientRect();
+        const viewerRect = viewer.getBoundingClientRect();
+        const scaleX = thumbRect.width / viewerRect.width;
+        const scaleY = thumbRect.height / viewerRect.height;
+        const translateX = thumbRect.left - viewerRect.left;
+        const translateY = thumbRect.top - viewerRect.top;
+        viewer.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`;
+        viewer.style.opacity = '0';
+      } else {
+        // Fallback: just fade out
+        viewer.style.opacity = '0';
+      }
+
+      // Remove the element after the animation completes
+      viewer.addEventListener(
+        'transitionend',
+        () => {
+          if (viewer) viewer.remove();
+          viewer = null;
+          setBottomPadding();
+          scrollLatest();
+        },
+        { once: true }
+      );
     }
 
     function toggleGameMode(){
       if(!viewer) return;
       const on = !body.classList.contains('game');
-      if(on){
+      
+      if(on){ // Storing original position before going to full mode
         const rect = viewer.getBoundingClientRect();
         viewer.dataset.origWidth  = viewer.style.width  || `${rect.width}px`;
         viewer.dataset.origHeight = viewer.style.height || `${rect.height}px`;
         viewer.dataset.origTop    = viewer.style.top;
         viewer.dataset.origLeft   = viewer.style.left;
-      } else {
+      } else { // Restoring position when exiting full mode
         if(viewer.dataset.origWidth)  viewer.style.width  = viewer.dataset.origWidth;
         if(viewer.dataset.origHeight) viewer.style.height = viewer.dataset.origHeight;
         if(viewer.dataset.origTop)    viewer.style.top    = viewer.dataset.origTop;
@@ -537,7 +662,15 @@
       }
       body.classList.toggle('game', on);
       viewer.classList.toggle('full', on);
-      fitViewer(); setBottomPadding(); scrollLatest();
+      
+      // Call fitViewer immediately to set the *target* styles for the animation
+      fitViewer(); 
+
+      // Defer layout adjustments until the animation is complete.
+      viewer.addEventListener('transitionend', () => {
+        setBottomPadding(); 
+        scrollLatest();
+      }, {once: true});
     }
 
     /* misc handlers */
