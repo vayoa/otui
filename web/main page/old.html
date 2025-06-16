@@ -25,6 +25,7 @@
       --txt:#fff;
       --blur:blur(4px);
       --shadow:0 4px 4px rgba(0,0,0,.25);
+      --chat-max-width: 1200px; /* NEW: Max width for the chat pane */
     }
 
     /* ───────── base layout ───────── */
@@ -40,44 +41,157 @@
       width:var(--sidebar-width);padding:1rem 1.25rem;
       background:var(--glass);backdrop-filter:var(--blur);border-right:1px solid var(--stroke);
       display:flex;flex-direction:column;
-      transition: width 0.3s ease, opacity 0.3s ease;
+      /* MODIFIED: Use a nicer easing curve and transition padding */
+      transition: width 0.4s cubic-bezier(.22,.61,.36,1),
+                  opacity 0.3s ease,
+                  padding 0.4s cubic-bezier(.22,.61,.36,1);
       overflow: hidden;
     }
     body.sidebar-collapsed #sidebar {
       width: 0;
       opacity: 0;
-      padding: 0;
+      padding-left: 0; /* Animate padding out */
+      padding-right: 0;
     }
-    #sidebar header{position:relative;font-family:'Italiana',serif;font-size:32px;margin-bottom:1rem}
-    #collapse-sidebar-btn{position:absolute;top:0;right:0;all:unset;cursor:pointer;font-size:1.2rem;color:var(--txt)}
-    #new-chat-btn{font-family:'Instrument Sans',sans-serif;font-size:18px;margin-bottom:1rem}
+    /* MODIFIED: Use flexbox for cleaner alignment */
+    #sidebar header{
+      display:flex;align-items:center;justify-content:space-between;
+      font-family:'Italiana',serif;font-size:32px;margin-bottom:1.25rem;
+    }
+    /* REMOVED: Old absolute positioning for collapse button is no longer needed */
+    /* #collapse-sidebar-btn{position:absolute; ... } */
+
+    /* MODIFIED: New "glass" button style */
+    #new-chat-btn{
+      all: unset;
+      box-sizing: border-box;
+      display: block;
+      width: 100%;
+      text-align: center;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.25rem;
+      font-family: 'Instrument Sans', sans-serif;
+      font-size: 16px;
+      color: var(--txt);
+      cursor: pointer;
+      background: var(--glass);
+      backdrop-filter: var(--blur);
+      border: 1px solid var(--stroke);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    }
+    #new-chat-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
+        background-color: rgba(25, 29, 48, 0.7);
+    }
+
     body.sidebar-collapsed #new-chat-btn{display:none}
-    #sidebar nav ul{list-style:none;margin:0;padding:0;flex:1;overflow:auto}
-    #sidebar nav li{padding:.4rem .25rem;border-radius:6px;cursor:pointer;transition:background .25s}
-    #sidebar nav li:hover{background:rgba(255,255,255,.04)}
+
+    #sidebar nav ul{list-style:none;margin:0;padding:0;flex:1;overflow-y:auto;overflow-x:hidden}
+    /* MODIFIED: Improved list item styling and hover animation */
+    #sidebar nav li{
+      padding:.6rem .75rem;
+      border-radius:6px;
+      cursor:pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition:background .2s ease, transform .2s ease;
+    }
+    #sidebar nav li:hover{
+      background:rgba(255,255,255,.1);
+      transform: translateX(5px);
+    }
+
+    /* MODIFIED: New wrapper for the entire main content area (header + chat) */
+    #main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0; /* Prevents flexbox overflow issues */
+      position: relative; /* For child positioning */
+      height: 100vh; /* Ensure it takes full viewport height */
+    }
+
+    /* MODIFIED: chat-wrapper now has a different role */
+    #chat-wrapper {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      min-width: 0; /* Prevents flexbox overflow issues */
+      overflow-x: hidden;
+      min-height: 0; /* Important for shrinking in a flex column */
+    }
 
     /* ───────── chat pane ───────── */
     #chat {
       position:relative;
-      flex:1;
+      /* MODIFIED: Width is now 100% to push scrollbar to edge */
+      width: 100%;
+      height: 100%; /* Fill the chat-wrapper */
+      /* REMOVED: max-width is now handled by padding on children */
       display:flex;
       flex-direction:column;
-      overflow:hidden;
       min-height: 0;
-      transition: margin-left 0.3s ease;
+      /* REMOVED: No longer need overflow:hidden, which trapped the viewer */
     }
-    body.sidebar-collapsed #chat { margin-left: 0; }
 
     .chat-header{
       flex:0 0 auto;display:flex;align-items:center;justify-content:center;
-      padding:1rem var(--chat-pad-x);background:var(--glass);backdrop-filter:var(--blur);
+      /* MODIFIED: Vertical padding only, as horizontal is handled by inner wrapper */
+      padding: 1rem 0;
+      background:var(--glass);backdrop-filter:var(--blur);
       border-bottom:1px solid var(--stroke);position:relative;z-index:20;
     }
-    .chat-header .controls{position:absolute;left:var(--chat-pad-x);display:flex;gap:.5rem}
-    #toggle-sidebar-btn,#new-chat-icon-btn{all:unset;cursor:pointer;font-size:1.2rem;color:var(--txt);display:none}
+
+    /* MODIFIED: New wrapper to center header content, matching chat width */
+    .header-content-wrapper {
+      width: 100%;
+      max-width: var(--chat-max-width);
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      padding: 0 var(--chat-pad-x);
+    }
+
+    /* MODIFIED: Controls are now positioned relative to the new inner wrapper */
+    .chat-header .controls{
+      position:absolute;
+      left: var(--chat-pad-x); /* Keep padding consistent */
+      display:flex;
+      gap:.5rem
+    }
+
     body.sidebar-collapsed #toggle-sidebar-btn,
-    body.sidebar-collapsed #new-chat-icon-btn{display:inline-block}
+    body.sidebar-collapsed #new-chat-icon-btn{display:inline-flex}
+
     .chat-header .title{font-family:'Italiana',serif;font-size:32px}
+
+    .icon-btn {
+      all: unset;
+      box-sizing: border-box;
+      cursor: pointer;
+      font-size: 1.2rem;
+      color: var(--txt);
+      width: 38px;
+      height: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      transition: background-color .2s ease, transform .2s ease;
+    }
+    .icon-btn:hover {
+      background-color: rgba(255,255,255,0.1);
+      transform: scale(1.1);
+    }
+
+    #toggle-sidebar-btn, #new-chat-icon-btn { display: none; }
+
 
     /* messages list */
     .messages{
@@ -86,7 +200,9 @@
       overflow-y:auto;
       display:flex;flex-direction:column-reverse;
       gap:2.25rem;
-      padding:2rem var(--chat-pad-x) 2.25rem;
+      /* MODIFIED: Use responsive padding to center content and push scrollbar to edge */
+      padding: 2rem max(var(--chat-pad-x), calc((100% - var(--chat-max-width)) / 2)) 2.25rem;
+      box-sizing: border-box;
       -webkit-overflow-scrolling:touch;
       overscroll-behavior:contain;
       scroll-behavior:smooth;
@@ -95,32 +211,32 @@
     /* bubbles / attachments */
     @keyframes fadeIn{from{opacity:0}to{opacity:1}}
     @keyframes pillIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
-    .message{max-width:720px;align-self:flex-start;line-height:1.6;position:relative}
+    /* MODIFIED: Horizontal margin removed, padding is now on parent .messages */
+    .message{
+      max-width:720px;align-self:flex-start;line-height:1.6;position:relative;
+    }
     .message.user{align-self:flex-end;text-align:right}
     .bubble{font-family:'Instrument Sans',sans-serif;font-size:18px}
 
     .bubble[contenteditable="true"] {
       border:1px solid var(--stroke);background:var(--glass);backdrop-filter:var(--blur);
       border-radius:7px;box-shadow:var(--shadow);
-      padding: 7px;
-      margin: 7px 0 7px 0;
-      outline: none;                                /* remove default focus ring */
+      padding:7px;margin:14px 0 14px 0;
+      outline: none;
     }
 
     .message.user .bubble{
       background:var(--glass);border:1px solid var(--stroke);border-radius:10px;
-      padding:1rem 1.3rem;backdrop-filter:var(--blur);box-shadow:var(--shadow)
+      padding:7px;margin:14px 0 14px 0;backdrop-filter:var(--blur);box-shadow:var(--shadow)
     }
     .attachments{display:flex;align-items:center;gap:11px;margin-bottom:.75rem}
-        .thumb {
+    .thumb {
       width: 220px; height: 28px; flex: 0 0 220px; border-radius: 7px; cursor: pointer;
       border: 1px solid var(--stroke); backdrop-filter: var(--blur); box-shadow: var(--shadow);
       transition: transform 0.2s ease, box-shadow 0.2s ease;
-      position: relative; /* Crucial for containing the img and placeholder */
-      overflow: hidden;   /* Hides the parts of the image wiping in */
+      position: relative;
+      overflow: hidden;
     }
-
-    /* NEW: Add the shimmer placeholder background to the wrapper */
     .thumb::before {
       content: '';
       position: absolute;
@@ -129,59 +245,44 @@
         rgba(255,255,255,0) 0%,
         rgba(255,255,255,0.08) 50%,
         rgba(255,255,255,0) 100%);
-      background-size: 440px 100%; /* Make it wider than the element for the sweep effect */
+      background-size: 440px 100%;
       animation: shimmer 1.5s infinite linear;
       transition: opacity 0.3s ease;
     }
-
     .thumb:hover {
       transform: translateY(-2px);
       box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
     }
-
-    /* NEW: Style the actual <img> tag inside the wrapper */
     .thumb img {
-      position: absolute; /* Position it on top of the placeholder */
+      position: absolute;
       inset: 0;
       width: 100%; height: 100%;
       object-fit: cover;
-      /* Image starts fully clipped and invisible */
       clip-path: inset(0 100% 0 0);
       opacity: 0;
       transition: clip-path 0.6s ease-out, opacity 0.4s ease-in;
     }
-
-    /* NEW: When JS adds .loaded to the wrapper... */
     .thumb.loaded::before {
-      /* ...fade out the placeholder shimmer */
       opacity: 0;
     }
     .thumb.loaded img {
-      /* ...wipe in and fade in the image */
       clip-path: inset(0 0 0 0);
       opacity: 1;
     }
-
-
     .pill{
       min-width:135px;padding:0 8px;display:flex;align-items:center;justify-content:center;
-
       border:1px solid var(--stroke);background:var(--glass);backdrop-filter:var(--blur);
-
       border-radius:7px;box-shadow:var(--shadow);font-family:'Pixelify Sans',sans-serif;font-size:15px;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-
     .message-actions{position:absolute;bottom:-1.3rem;left:0;display:flex;gap:.4rem;opacity:0;transition:opacity .2s}
-.message:hover .message-actions{opacity:1}
-.message-actions button{all:unset;cursor:pointer;font-family:'Pixelify Sans',sans-serif;font-size:15px;color:var(--txt)}
+    .message:hover .message-actions{opacity:1}
+    .message-actions button{all:unset;cursor:pointer;font-family:'Pixelify Sans',sans-serif;font-size:15px;color:var(--txt)}
 
     .pill:hover {
       transform: translateY(-2px);
       box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
     }
-
-    /* hide until animated in */
     .pill .ellipsis,
     .pill .number {
       opacity: 0;
@@ -201,7 +302,8 @@
 
     /* ───────── floating viewer ───────── */
     .viewer{
-      position:absolute;left:var(--chat-pad-x);top:var(--chat-pad-x);
+      position:absolute;
+      /* MODIFIED: Removed top/left, will be set by JS for full freedom of movement */
       width:720px;max-width:calc(100% - var(--chat-pad-x)*2);
       background:var(--glass-strong);backdrop-filter:var(--blur);
       border:1px solid var(--stroke);border-radius:7px;padding:11.5px;
@@ -216,14 +318,11 @@
         width    .4s cubic-bezier(.22,.61,.36,1),
         height   .4s cubic-bezier(.22,.61,.36,1);
     }
-
     .viewer.no-transition { transition:none!important }
-
     .viewer.full{pointer-events:none;}
     .viewer.full footer,
     .viewer.full footer *,
     .viewer.full .resize-handle{pointer-events:auto;}
-
     .viewer img{
       width:100%;height:100%;object-fit:contain;border-radius:7px;pointer-events:none;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -239,17 +338,12 @@
       display:flex;align-items:center;gap:4px;
     }
     .viewer footer button{all:unset;min-width:26px;text-align:center;cursor:pointer;font-size:1rem}
-
-    /* new indicator style */
     .viewer footer .indicator {
       color: var(--txt);
       margin: 0 4px;
       font-size: 0.9rem;
       user-select: none;
     }
-
-
-    /* bigger, invisible click‐area around the resize handle */
     .resize-handle {
       position: absolute;
       right: 0;
@@ -268,8 +362,6 @@
       border-right: 1px solid var(--stroke);
       border-bottom: 1px solid var(--stroke);
     }
-
-    /* only drag/hover anim when NOT full (game mode disables) */
     .viewer:not(.full).dragging {
       transform: scale(0.96);
       cursor: grabbing;
@@ -279,14 +371,30 @@
       transform: scale(0.98);
       box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
     }
-
-    /* disable hover anim when over the resize-handle */
     .viewer.no-hover-animation:not(.dragging):hover {
       transform: none !important;
       box-shadow: none !important;
     }
 
     /* ─── viewer image transition helpers ─── */
+    /* NEW: Add loading shimmer effect for viewer */
+    .viewer::before {
+      content: '';
+      position: absolute;
+      inset: 11.5px; /* Match padding */
+      border-radius: 7px; /* Match image radius */
+      background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.04) 50%, rgba(255,255,255,0) 100%);
+      background-size: 800px 100%;
+      animation: shimmer 2s infinite linear;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 1; /* Sit above img but below footer */
+      pointer-events: none;
+    }
+    .viewer.loading::before {
+      opacity: 1;
+    }
+
     @keyframes blurFade {
       0%   { opacity:0; filter:blur(6px)  brightness(.9); transform:scale(1.02); }
       100% { opacity:1; filter:blur(0)    brightness(1);  transform:none; }
@@ -300,30 +408,26 @@
       100% { opacity:1; filter:blur(0), drop-shadow(0 4px 12px rgba(0,0,0,0.5));   transform:none; }
     }
 
-    /* MODIFIED: Add padding-top to the transition for smooth animation in game mode */
     .messages {
       transition:
         padding-bottom .4s cubic-bezier(.22,.61,.36,1),
         padding-top .4s cubic-bezier(.22,.61,.36,1);
     }
-
-    /* thumb reveal */
     @keyframes thumbReveal { from{clip-path:inset(0 100% 0 0); opacity:0; filter:blur(30px)} to{clip-path:inset(0 0 0 0); opacity:1; filter:blur(0)}}
-
     @keyframes shimmer {
       0%   { background-position: -440px 0; }
       100% { background-position: 440px 0;  }
     }
 
-
     /* ───────── prompt bar ───────── */
-    /* MODIFIED: Removed fixed height to allow the prompt bar to grow */
     #prompt-form {
       flex: 0 0 auto;
       display: flex;
-      align-items: center; /* Vertically center button with textarea */
+      align-items: center;
       gap: .8rem;
-      padding: 0 var(--chat-pad-x);
+      /* MODIFIED: Use responsive padding to center content column */
+      padding: 0 max(var(--chat-pad-x), calc((100% - var(--chat-max-width)) / 2));
+      box-sizing: border-box;
       margin-bottom: 2rem;
     }
     #prompt-input {
@@ -338,9 +442,24 @@
       font-family: 'Instrument Sans', sans-serif;
       font-size: 18px;
       color: #fff;
-      /* NEW: Allow scrolling inside the textarea when max-height is reached */
-      overflow-y: auto;
+      /* MODIFIED: Hide scrollbar by default; JS will show it when needed */
+      overflow-y: hidden;
     }
+    /* NEW: Nicer scrollbar for the prompt input */
+    #prompt-input::-webkit-scrollbar {
+      width: 8px;
+    }
+    #prompt-input::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    #prompt-input::-webkit-scrollbar-thumb {
+      background-color: rgba(255, 255, 255, 0.25);
+      border-radius: 4px;
+    }
+    #prompt-input::-webkit-scrollbar-thumb:hover {
+      background-color: rgba(255, 255, 255, 0.4);
+    }
+
     #send-btn{all:unset;padding:.65rem 1.1rem;border-radius:8px;cursor:pointer;
       background:linear-gradient(135deg,#d67aff 0%,#7967ff 100%);box-shadow:var(--shadow)}
   </style>
@@ -349,43 +468,52 @@
 <body>
   <!-- sidebar -->
   <aside id="sidebar">
-    <header>ROAM <button id="collapse-sidebar-btn">☰</button></header>
+    <header>ROAM <button id="collapse-sidebar-btn" class="icon-btn">☰</button></header>
     <button id="new-chat-btn">+ Start a new adventure</button>
     <nav><ul id="chat-list"></ul></nav>
   </aside>
 
-  <!-- chat -->
-  <main id="chat">
-    <div class="chat-header">
-      <div class="controls">
-        <button id="toggle-sidebar-btn">☰</button>
-        <button id="new-chat-icon-btn">➕</button>
-      </div>
-      <span class="title">Adventure</span>
-    </div>
-
-    <!-- viewer template -->
-    <div id="viewer-template" class="viewer" style="display:none">
-      <img alt="preview">
-      <footer>
-        <button id="expand-btn">⤢</button>
-        <div class="chevrons">
-          <button id="prev-btn">❮</button>
-          <span class="indicator">0/0</span>
-          <button id="next-btn">❯</button>
+  <!-- MODIFIED: New main content wrapper to fix header width and centering -->
+  <div id="main-content">
+    <header class="chat-header">
+      <!-- MODIFIED: Wrapper for header content to align with chat pane -->
+      <div class="header-content-wrapper">
+        <div class="controls">
+          <button id="toggle-sidebar-btn" class="icon-btn">☰</button>
+          <button id="new-chat-icon-btn" class="icon-btn">➕</button>
         </div>
-        <button id="close-btn">✕</button>
-      </footer>
-      <div class="resize-handle"></div>
+        <span class="title">Adventure</span>
+      </div>
+    </header>
+
+    <!-- This wrapper now just centers the chat pane -->
+    <div id="chat-wrapper">
+      <main id="chat">
+        <div id="messages" class="messages"></div>
+
+        <form id="prompt-form">
+          <textarea id="prompt-input" placeholder="What would you like to do?" rows="1"></textarea>
+          <button id="send-btn">➤</button>
+        </form>
+      </main>
     </div>
+  </div>
 
-    <div id="messages" class="messages"></div>
+  <!-- MODIFIED: Viewer template moved to be a direct child of <body> for freedom of movement -->
+  <div id="viewer-template" class="viewer" style="display:none">
+    <img alt="preview">
+    <footer>
+      <button id="expand-btn">⤢</button>
+      <div class="chevrons">
+        <button id="prev-btn">❮</button>
+        <span class="indicator">0/0</span>
+        <button id="next-btn">❯</button>
+      </div>
+      <button id="close-btn">✕</button>
+    </footer>
+    <div class="resize-handle"></div>
+  </div>
 
-    <form id="prompt-form">
-      <textarea id="prompt-input" placeholder="What would you like to do?" rows="1"></textarea>
-      <button id="send-btn">➤</button>
-    </form>
-  </main>
 
   <script>
     /* helpers & constants */
@@ -417,34 +545,37 @@
     /* state */
     let viewer=null, gallery=[], assistantCount=0;
     const BASE_PAD = parseInt(getComputedStyle(messages).paddingBottom) || 0;
-    // NEW: Store initial top padding to reset to
     const BASE_PAD_TOP = parseInt(getComputedStyle(messages).paddingTop) || 0;
 
     /* layout */
+    // MODIFIED: Rewritten to be more robust and work with the viewer as a child of <body>
     function fitViewer(){
       if(!viewer || !viewer.classList.contains('full')) return;
-      const chatBox=chat.getBoundingClientRect(),
-            headH=header.getBoundingClientRect().height,
-            promptH=promptBar.getBoundingClientRect().height,
-            left=promptInput.getBoundingClientRect().left - chatBox.left,
-            width=sendBtn.getBoundingClientRect().right - promptInput.getBoundingClientRect().left,
-            height = chatBox.height - headH - SPACER - promptH - RESERVE;
+
+      const headerRect = header.getBoundingClientRect();
+      const promptBarRect = promptBar.getBoundingClientRect();
+      const promptInputRect = promptInput.getBoundingClientRect();
+      const sendBtnRect = sendBtn.getBoundingClientRect();
+      const chatRect = chat.getBoundingClientRect();
+
+      const left = promptInputRect.left;
+      const top = headerRect.bottom + SPACER;
+      const width = sendBtnRect.right - promptInputRect.left;
+      const height = chatRect.height - SPACER - promptBarRect.height - RESERVE;
+
       viewer.style.left   = `${left}px`;
-      viewer.style.top    = `${headH + SPACER}px`;
+      viewer.style.top    = `${top}px`;
       viewer.style.width  = `${width}px`;
       viewer.style.height = `${Math.max(180,height)}px`;
     }
 
-    // RENAMED & MODIFIED: Was `setBottomPadding`, now handles top and bottom padding
     function updateMessagePadding() {
       if (viewer && viewer.classList.contains('full')) {
-        // NEW: Calculate top padding to push content below the viewer
         const viewerRect = viewer.getBoundingClientRect();
         const messagesRect = messages.getBoundingClientRect();
         const requiredTopPad = (viewerRect.bottom - messagesRect.top) + GAP;
         messages.style.paddingTop = `${requiredTopPad}px`;
 
-        // This is the original bottom padding logic
         const latest = messages.querySelector('.message.latest') || messages.lastElementChild;
         const bh = latest ? latest.getBoundingClientRect().height : 70;
         const viewerBottom = viewer.getBoundingClientRect().bottom;
@@ -453,17 +584,22 @@
         if (pad < 0) pad = 0;
         messages.style.paddingBottom = pad + 'px';
       } else {
-        // Reset both paddings when not in game mode
         messages.style.paddingTop = `${BASE_PAD_TOP}px`;
         messages.style.paddingBottom = `${BASE_PAD}px`;
       }
     }
 
     function scrollLatest(){
+      // MODIFIED: Use element.scrollTo for smooth scrolling that works reliably.
+      // The condition checks if the user is near the bottom of the chat.
       if (messages.scrollTop <= 40) {
-        messages.scrollTop = messages.scrollHeight;
+        messages.scrollTo({
+          top: 0, // In column-reverse, top of scroll is the visual bottom.
+          behavior: 'smooth'
+        });
       }
     }
+
 
     function markLatestAssistant(){
       qsa('.message.assistant').forEach(m=>m.classList.remove('latest'));
@@ -482,16 +618,13 @@
 
       const att=document.createElement('div'); att.className='attachments';
       if(img){
-        // 1. Create a wrapper DIV instead of an IMG
         const wrapper = document.createElement('div');
-        wrapper.className = 'thumb'; // We'll rename this class in CSS
+        wrapper.className = 'thumb';
         wrapper.onclick = () => openViewer(img, wrapper);
 
-        // 2. Create the actual image element to go inside
         const th = document.createElement('img');
         th.src = img;
 
-        // 3. Append the image to the wrapper, then the wrapper to the attachments
         wrapper.appendChild(th);
         att.appendChild(wrapper);
 
@@ -523,42 +656,24 @@
 
       const items = wrap.querySelectorAll('.attachments > *');
       items.forEach((el, i) => {
-        const baseDelay = i * 0.2; // seconds
+        const baseDelay = i * 0.2;
 
         el.style.opacity = '0';
-        // expose it to CSS:
         el.style.setProperty('--base-delay', `${baseDelay}s`);
 
-        // animate the container itself:
         if (el.classList.contains('thumb')) {
-          /* ① kick off the card’s slide-in straight away */
           el.style.animation = `slideIn .3s ease-out forwards var(--base-delay)`;
-
-          /* ② when the bitmap is ready, wait for the slide-in to finish,
-               then add .loaded so the clip-path can animate */
-          const SLIDE_MS = 50; // duration of @keyframes slideIn
-
-          // The element `el` is the wrapper div. We need the image INSIDE it.
+          const SLIDE_MS = 50;
           const imageEl = el.querySelector('img');
-
           const reveal = () =>
-            setTimeout(() => // wait the 300 ms…
-              requestAnimationFrame(() => el.classList.add('loaded')) // …then one frame
+            setTimeout(() =>
+              requestAnimationFrame(() => el.classList.add('loaded'))
             , SLIDE_MS);
-
-          if (imageEl.complete) {
-            // image came from cache
-            reveal();
-          } else {
-            imageEl.addEventListener('load', reveal, { once: true });
-          }
+          if (imageEl.complete) { reveal(); } else { imageEl.addEventListener('load', reveal, { once: true }); }
         } else {
           el.style.animation = `slideIn .3s ease-out forwards var(--base-delay)`;
         }
-
         el.addEventListener('animationend', () => {
-          // leave it at the final keyframe (opacity:1, transform:none), but
-          // clear the animation so hover / other CSS transforms take over.
           el.style.opacity = '1';
           el.style.animation = '';
         }, { once: true });
@@ -566,10 +681,9 @@
 
       markLatestAssistant();
 
-      // always refresh the preview window
       if(img && viewer) openViewer(img);
 
-      updateMessagePadding(); // MODIFIED: Call the updated padding function
+      updateMessagePadding();
       scrollLatest();
 
       if (from === 'assistant') {
@@ -586,94 +700,86 @@
     function scrubInlineTransform(el) {
       el.addEventListener('transitionend', e => {
         if (e.propertyName === 'transform') {
-          el.style.removeProperty('transform');   // <- releases :hover & .dragging
+          el.style.removeProperty('transform');
         }
       });
     }
 
     /* open / update viewer */
+    // MODIFIED: Refactored to show viewer frame instantly before image loads.
     function openViewer(src, fromThumb = null) {
-      // ——— PART 0: Preload so we don't blank out ———
-      const preload = new Image();
-      preload.src = src;
-      preload.onload = () => {
+      // --- Phase 1: Create and show the viewer frame immediately ---
+      if (!viewer) {
+        viewer = qs('#viewer-template').cloneNode(true);
+        viewer.id = '';
+        viewer.style.display = '';
+        viewer.originThumb = fromThumb;
+        document.body.appendChild(viewer);
+        addViewerHandlers();
 
-        // ——— PART 1: Create & animate the viewer open (unchanged) ———
-        if (!viewer) {
-          viewer = qs('#viewer-template').cloneNode(true);
-          viewer.id = '';
-          viewer.style.display = '';
-          viewer.originThumb = fromThumb;
-          chat.appendChild(viewer);
-          addViewerHandlers();
-
-          // Restore previous size and position
-          if (viewerState.width) {
-            viewer.style.width  = viewerState.width;
-            viewer.style.height = viewerState.height;
-            viewer.style.top    = viewerState.top;
-            viewer.style.left   = viewerState.left;
-          }
-
-          if (fromThumb) {
-              if (body.classList.contains('game')) viewer.classList.add('full');
-              // 0️⃣  Measure where we are and where we need to start
-              const final = viewer.getBoundingClientRect();
-              const thumb = fromThumb.getBoundingClientRect();
-
-              const scaleX = thumb.width  / final.width;
-              const scaleY = thumb.height / final.height;
-              const dx     = thumb.left - final.left;
-              const dy     = thumb.top  - final.top;
-
-              // 1️⃣  Jump instantly on top of the thumbnail **without** transitions
-              viewer.classList.add('no-transition');
-              viewer.style.transformOrigin = 'top left';
-              viewer.style.opacity   = '0';
-              viewer.style.transform = `translate(${dx}px,${dy}px) scale(${scaleX},${scaleY})`;
-              void viewer.offsetWidth;
-              viewer.classList.remove('no-transition');
-
-              // 2️⃣  Next frame: animate to full size & full opacity
-              requestAnimationFrame(() => {
-                viewer.style.opacity   = '1';
-                viewer.style.transform = 'none';
-              });
-
-              // After the transition, clean up and adjust layout.
-              viewer.addEventListener(
-                'transitionend',
-                () => {
-                  viewer.style.removeProperty('transform');
-                  updateMessagePadding(); // MODIFIED: Call the updated padding function
-                  scrollLatest();
-                },
-                { once: true }
-              );
-            } else {
-              // No thumbnail → simple fade-in
-              viewer.style.opacity = '0';
-              requestAnimationFrame(() => (viewer.style.opacity = '1'));
-            }
+        if (viewerState.width) { // Restore previous state if available
+          viewer.style.width  = viewerState.width;
+          viewer.style.height = viewerState.height;
+          viewer.style.top    = viewerState.top;
+          viewer.style.left   = viewerState.left;
+        } else { // Or position initially if no state exists
+          const chatRect = chat.getBoundingClientRect();
+          viewer.style.left = `${chatRect.left + css('--chat-pad-x')}px`;
+          viewer.style.top = `${chatRect.top + css('--chat-pad-x')}px`;
         }
 
-        // ——— PART 2: Swap in the new image with animation ———
+        // Animate from thumbnail if one was clicked
+        if (fromThumb) {
+            if (body.classList.contains('game')) viewer.classList.add('full');
+            const final = viewer.getBoundingClientRect();
+            const thumb = fromThumb.getBoundingClientRect();
+            const scaleX = thumb.width  / final.width;
+            const scaleY = thumb.height / final.height;
+            const dx     = thumb.left - final.left;
+            const dy     = thumb.top  - final.top;
+            viewer.classList.add('no-transition');
+            viewer.style.transformOrigin = 'top left';
+            viewer.style.opacity   = '0';
+            viewer.style.transform = `translate(${dx}px,${dy}px) scale(${scaleX},${scaleY})`;
+            void viewer.offsetWidth;
+            viewer.classList.remove('no-transition');
+            requestAnimationFrame(() => {
+              viewer.style.opacity   = '1';
+              viewer.style.transform = 'none';
+            });
+            viewer.addEventListener('transitionend', () => {
+              viewer.style.removeProperty('transform');
+              updateMessagePadding();
+              scrollLatest();
+            }, { once: true });
+        } else { // Otherwise, just fade it in
+          viewer.style.opacity = '0';
+          requestAnimationFrame(() => (viewer.style.opacity = '1'));
+        }
+      }
+
+      viewer.classList.add('loading'); // Show shimmer effect
+
+      // --- Phase 2: Load the image and display it when ready ---
+      const preload = new Image();
+      preload.src = src;
+
+      preload.onload = () => {
+        viewer.classList.remove('loading'); // Hide shimmer
+
         const imgEl = qs('img', viewer);
         if (imgEl.src !== src) {
-          // hide old
           imgEl.style.opacity = 0;
-          const newThumb = qsa('.thumb').find(t => t.src === src);
-          if (newThumb) viewer.originThumb = newThumb; // Update origin for close animation
-          // kick off onload animation
+          // Bugfix: Correctly find the new thumbnail by checking the img src inside it
+          const newThumb = qsa('.thumb').find(t => t.querySelector('img')?.src === src);
+          if (newThumb) viewer.originThumb = newThumb;
+
           imgEl.onload = () => {
-            // determine slide direction
             const newIdx = gallery.indexOf(src);
             const dir = lastViewerIndex === -1 ? 0
                       : (newIdx - lastViewerIndex + gallery.length) % gallery.length === 1 ? 1
                       : -1;
             lastViewerIndex = newIdx;
-
-            // pick animation
             const anim = dir === 1 ? 'slideRightIn'
                       : dir === -1 ? 'slideLeftIn'
                       : 'blurFade';
@@ -682,17 +788,17 @@
             imgEl.addEventListener('animationend',
               () => imgEl.style.animation = '', { once: true });
           };
-
-          // swap source—now instantly available from cache
           imgEl.src = src;
+        } else {
+          // If for some reason the same image is loaded, ensure it's visible.
+          imgEl.style.opacity = 1;
         }
 
-        // update indicator
         const ind = qs('.indicator', viewer);
         const idx = gallery.indexOf(src);
         if (ind) ind.textContent = `${idx+1}/${gallery.length}`;
 
-        // ensure full-mode sizing if needed
+        // Fit viewer in case of game mode.
         if (viewer.style.opacity === '1') fitViewer();
       };
     }
@@ -748,36 +854,25 @@
         if(rz){
           viewer.style.width = Math.max(320, sw + (e.clientX - stx))+'px';
           viewer.style.height = Math.max(200, sh + (e.clientY - sty))+'px';
-          updateMessagePadding(); // MODIFIED: Call the updated padding function
+          updateMessagePadding();
         }
       });
       window.addEventListener('mouseup', ()=> rz=false);
-
-      // disable hover-on-viewer when cursor is over the resize handle
       handle.addEventListener('mouseenter', ()=>viewer.classList.add('no-hover-animation'));
       handle.addEventListener('mouseleave', ()=>viewer.classList.remove('no-hover-animation'));
     }
 
     function closeViewer() {
       if (!viewer) return;
-
-      // Determine if we're closing from game mode
       const isGameMode = viewer.classList.contains('full');
-
-      // Save last size and position only if not in game mode
       if (!isGameMode) {
         viewerState.width = viewer.style.width || `${viewer.getBoundingClientRect().width}px`;
         viewerState.height = viewer.style.height || `${viewer.getBoundingClientRect().height}px`;
         viewerState.top = viewer.style.top || `${viewer.getBoundingClientRect().top}px`;
         viewerState.left = viewer.style.left || `${viewer.getBoundingClientRect().left}px`;
       }
-
-      // Exit game mode
       body.classList.remove('game');
-
       window.removeEventListener('keydown', viewer._keys);
-
-      // Animate back to the thumbnail if it exists and is visible
       const fromThumb = viewer.originThumb;
       if (fromThumb) {
         const thumbRect = fromThumb.getBoundingClientRect();
@@ -789,17 +884,14 @@
         viewer.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`;
         viewer.style.opacity = '0';
       } else {
-        // Fallback: just fade out
         viewer.style.opacity = '0';
       }
-
-      // Remove the element after the animation completes
       viewer.addEventListener(
         'transitionend',
         () => {
           if (viewer) viewer.remove();
           viewer = null;
-          updateMessagePadding(); // MODIFIED: Call the updated padding function
+          updateMessagePadding();
           scrollLatest();
         },
         { once: true }
@@ -809,14 +901,13 @@
     function toggleGameMode(){
       if(!viewer) return;
       const on = !body.classList.contains('game');
-
-      if(on){ // Storing original position before going to full mode
+      if(on){
         const rect = viewer.getBoundingClientRect();
         viewer.dataset.origWidth  = viewer.style.width  || `${rect.width}px`;
         viewer.dataset.origHeight = viewer.style.height || `${rect.height}px`;
         viewer.dataset.origTop    = viewer.style.top;
         viewer.dataset.origLeft   = viewer.style.left;
-      } else { // Restoring position when exiting full mode
+      } else {
         if(viewer.dataset.origWidth)  viewer.style.width  = viewer.dataset.origWidth;
         if(viewer.dataset.origHeight) viewer.style.height = viewer.dataset.origHeight;
         if(viewer.dataset.origTop)    viewer.style.top    = viewer.dataset.origTop;
@@ -824,13 +915,9 @@
       }
       body.classList.toggle('game', on);
       viewer.classList.toggle('full', on);
-
-      // Call fitViewer immediately to set the *target* styles for the animation
       fitViewer();
-
-      // Defer layout adjustments until the animation is complete.
       viewer.addEventListener('transitionend', () => {
-        updateMessagePadding(); // MODIFIED: Call the updated padding function
+        updateMessagePadding();
         scrollLatest();
       }, {once: true});
     }
@@ -838,67 +925,57 @@
     /* misc handlers */
     document.addEventListener('click',e=>{
       if (e.target.matches('.edit-btn')) {
-        const btn    = e.target;
-        const msgEl  = btn.closest('.message');
+        const btn = e.target;
+        const msgEl = btn.closest('.message');
         const bubble = msgEl.querySelector('.bubble');
-
-        // shared finish function
         const finishEdit = () => {
           bubble.contentEditable = false;
-          btn.textContent       = 'Edit';
+          btn.textContent = 'Edit';
           bubble.removeEventListener('keydown', onKeydown);
           bubble.removeEventListener('focusout', onFocusOut);
         };
-
-        // save on Enter
         const onKeydown = ev => {
           if (ev.key === 'Enter' && !ev.shiftKey) {
             ev.preventDefault();
             finishEdit();
           }
         };
-
-        // save on blur **unless** next focus is the Save button
         const onFocusOut = ev => {
-          // `relatedTarget` is what’s getting focus next
-          if (ev.relatedTarget && ev.relatedTarget.matches('.edit-btn')) {
-            return;
-          }
+          if (ev.relatedTarget && ev.relatedTarget.matches('.edit-btn')) { return; }
           finishEdit();
         };
-
         if (btn.textContent === 'Edit') {
-          // → ENTER edit mode
           bubble.contentEditable = true;
           bubble.focus();
-          btn.textContent       = 'Save';
+          btn.textContent = 'Save';
           bubble.addEventListener('keydown', onKeydown);
           bubble.addEventListener('focusout', onFocusOut);
         } else {
-          // → SAVE (exit) mode
           finishEdit();
         }
       }
       if(e.target.matches('.regenerate-btn')) console.log('Regenerate', e.target.closest('.message'));
     });
 
+    // MODIFIED: Removed Shift+Enter handler to prevent race conditions.
+    // The 'input' event listener is sufficient and more reliable.
     promptInput.addEventListener('keydown',e=>{
-      if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendBtn.click(); }
+      if(e.key==='Enter' && !e.shiftKey){
+        e.preventDefault();
+        sendBtn.click();
+      }
     });
+
     qs('#prompt-form').onsubmit=e=>{
       e.preventDefault();
       const txt = promptInput.value.trim();
       if(!txt) return;
-      // disable immediately
       promptInput.disabled = true;
       sendBtn.disabled   = true;
-
       addMessage(txt,{from:'user'});
       promptInput.value='';
-      
-      // NEW: Trigger a resize after clearing the input to shrink it back down
-      setTimeout(() => promptInput.dispatchEvent(new Event('input')), 0);
-
+      // Manually trigger resize after clearing input
+      setTimeout(resizePrompt, 0);
       setTimeout(()=>addMessage('Lorem ipsum dolor sit amet…'),700);
     };
 
@@ -912,6 +989,8 @@
       messages.innerHTML=''; gallery=[]; assistantCount=0; closeViewer();
     };
 
+
+
     window.addEventListener('keydown',e=>{
       if(e.key==='Tab'){ e.preventDefault(); body.classList.toggle('sidebar-collapsed'); }
     });
@@ -920,37 +999,44 @@
     /* seed */
     addMessage('Welcome to ROAM!  Try toggling game-mode (click an image & “⤢”).');
 
-    // NEW: Function to setup auto-resizing for the prompt textarea
-    function setupPromptAutoResize() {
-      const style = getComputedStyle(promptInput);
-      let lineHeight = parseFloat(style.lineHeight);
-      if (isNaN(lineHeight)) {
-          // Fallback for 'normal' line-height
-          lineHeight = parseFloat(style.fontSize) * 1.2;
-      }
-      const paddingTop = parseFloat(style.paddingTop);
-      const paddingBottom = parseFloat(style.paddingBottom);
+    // MODIFIED: Extracted resizePrompt to be a global, more robust function.
+    function resizePrompt() {
+        promptInput.style.height = 'auto'; // Reset height
+        
+        // MODIFIED: Conditionally show scrollbar only when content exceeds max-height
+        const maxHeight = parseFloat(getComputedStyle(promptInput).maxHeight);
+        if (promptInput.scrollHeight > maxHeight) {
+            promptInput.style.overflowY = 'auto';
+        } else {
+            promptInput.style.overflowY = 'hidden';
+        }
 
-      // Calculate max height for 4 lines of text + vertical padding
-      const maxHeight = (4 * lineHeight) + paddingTop + paddingBottom;
-      promptInput.style.maxHeight = `${maxHeight}px`;
-
-      const resizePrompt = () => {
-          promptInput.style.height = 'auto'; // Reset height to shrink if needed
-          promptInput.style.height = `${promptInput.scrollHeight}px`; // Grow to content
-
-          // As prompt resizes, we must adjust layout if in game mode
+        promptInput.style.height = `${promptInput.scrollHeight}px`; // Set to content height
+        
+        // In game mode, we need to recalculate layout after the prompt resizes.
+        // requestAnimationFrame ensures this happens after the browser has painted the change.
+        requestAnimationFrame(() => {
           if (body.classList.contains('game')) {
               fitViewer();
               updateMessagePadding();
           }
-      };
-
-      promptInput.addEventListener('input', resizePrompt);
-      resizePrompt(); // Initial call
+        });
     }
 
-    // NEW: Initialize the auto-resizing prompt functionality
+    function setupPromptAutoResize() {
+      const style = getComputedStyle(promptInput);
+      let lineHeight = parseFloat(style.lineHeight);
+      if (isNaN(lineHeight)) {
+          lineHeight = parseFloat(style.fontSize) * 1.2;
+      }
+      const paddingTop = parseFloat(style.paddingTop);
+      const paddingBottom = parseFloat(style.paddingBottom);
+      const maxHeight = (4 * lineHeight) + paddingTop + paddingBottom;
+      promptInput.style.maxHeight = `${maxHeight}px`;
+
+      promptInput.addEventListener('input', resizePrompt);
+      resizePrompt(); // Set initial size
+    }
     setupPromptAutoResize();
   </script>
 </body>
