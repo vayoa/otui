@@ -826,7 +826,7 @@
       const sendBtn = qs("#send-btn");
       const messages = qs("#messages");
 
-      const BOTTOM_TOLERANCE = 8;
+      const BOTTOM_TOLERANCE = 20;
       const GAP_BELOW_LATEST = 60; // room left under latest message
       const STICKY_TOLERANCE = GAP_BELOW_LATEST + 5; // 75 px
       let autoStick = true; // are we currently magnetised?
@@ -952,12 +952,6 @@
         // Helper function to recursively walk the temporary DOM and append to the real element.
         const streamNode = async (sourceNode, targetElement) => {
           for (const child of Array.from(sourceNode.childNodes)) {
-            const stickTolerance = 20;
-            const nearBottom =
-              messages.scrollTop + messages.clientHeight >=
-              messages.scrollHeight - stickTolerance;
-            const shouldStick = autoStick && nearBottom;
-
             if (child.nodeType === Node.TEXT_NODE) {
               // For text nodes, split into words and whitespace.
               const parts = child.textContent.split(/(\s+)/);
@@ -974,9 +968,12 @@
                   span.style.display = "inline-block";
                   span.style.animation = "wordFadeIn 0.4s ease-out forwards";
                   targetElement.appendChild(span);
-                  if (shouldStick && !body.classList.contains("game")) {
+                  // --- START: MODIFIED CODE ---
+                  // Check the live value of autoStick on every part, not a cached value.
+                  if (autoStick && !body.classList.contains("game")) {
                     scrollToBottom("auto");
                   }
+                  // --- END: MODIFIED CODE ---
                   await new Promise((r) => setTimeout(r, speed));
                 }
               }
@@ -988,9 +985,11 @@
               }
               targetElement.appendChild(newElement);
 
-              if (shouldStick && !body.classList.contains("game")) {
+              // --- START: MODIFIED CODE ---
+              if (autoStick && !body.classList.contains("game")) {
                 scrollToBottom("auto");
               }
+              // --- END: MODIFIED CODE ---
 
               // Recurse into the new element.
               await streamNode(child, newElement);
