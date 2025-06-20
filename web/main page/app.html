@@ -467,7 +467,8 @@
       }
       .viewer.full footer,
       .viewer.full footer *,
-      .viewer.full .resize-handle {
+      .viewer.full .resize-handle,
+      .viewer.full .vertical-resize-handle {
         pointer-events: auto;
       }
       .viewer.full .resize-handle {
@@ -532,6 +533,19 @@
         height: 16px;
         border-right: 1px solid var(--stroke);
         border-bottom: 1px solid var(--stroke);
+      }
+      .vertical-resize-handle {
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        height: 20px;
+        cursor: ns-resize;
+        display: none;
+        z-index: 5;
+      }
+      .viewer.full .vertical-resize-handle {
+        display: block;
       }
       .viewer:not(.full).dragging {
         transform: scale(0.96);
@@ -749,6 +763,7 @@
         <button id="close-btn">✕</button>
       </footer>
       <div class="resize-handle"></div>
+      <div class="vertical-resize-handle"></div>
     </div>
     <script>
       const qs = (s, p = document) => p.querySelector(s);
@@ -834,6 +849,8 @@
         gallery = [],
         assistantCount = 0;
 
+      // --- START: MODIFIED FUNCTION ---
+      // Now respects manual resize state. It only sets the height if not manually resized.
       function fitViewer() {
         if (!viewer || !viewer.classList.contains("full")) return;
 
@@ -846,17 +863,19 @@
         const left = promptInputRect.left;
         const top = headerRect.bottom + SPACER;
         const width = sendBtnRect.right - promptInputRect.left;
-        const height =
-          chatRect.height - SPACER - promptBarRect.height - RESERVE;
 
         viewer.style.left = `${left}px`;
         viewer.style.top = `${top}px`;
         viewer.style.width = `${width}px`;
-        viewer.style.height = `${Math.max(180, height)}px`;
-      }
 
-      // --- FIX 1: Modified function to align any message, not just ones with thumbnails.
-      // It prefers aligning the .thumb, but falls back to the .bubble.
+        if (viewer.dataset.isManuallyResized !== "true") {
+          const height =
+            chatRect.height - SPACER - promptBarRect.height - RESERVE;
+          viewer.style.height = `${Math.max(180, height)}px`;
+        }
+      }
+      // --- END: MODIFIED FUNCTION ---
+
       function scrollMessageIntoPosition(
         message,
         { behavior = "smooth" } = {}
@@ -903,7 +922,6 @@
         }
       }
 
-      // --- FIX 1: Modified to return the message element so we can use it for scrolling. ---
       async function addMessage(text, { from = "assistant", img } = {}) {
         if (from === "assistant" && !img) {
           img = `https://picsum.photos/seed/${Date.now()}/1024/600`;
@@ -997,7 +1015,6 @@
 
         markLatestAssistant();
 
-        // --- FIX 2: Added rAF to prevent race conditions with layout changes.
         if (body.classList.contains("game") && from === "assistant") {
           requestAnimationFrame(() =>
             scrollMessageIntoPosition(wrap, { behavior: "smooth" })
@@ -1110,12 +1127,17 @@
         };
       }
 
+      // --- START: MODIFIED FUNCTION ---
+      // Now sets data-attributes on resize to ensure persistence.
       function addViewerHandlers() {
         const img = qs("img", viewer),
           prev = qs("#prev-btn", viewer),
           next = qs("#next-btn", viewer),
           close = qs("#close-btn", viewer),
-          expand = qs("#expand-btn", viewer);
+          expand = qs("#expand-btn", viewer),
+          cornerHandle = qs(".resize-handle", viewer),
+          verticalHandle = qs(".vertical-resize-handle", viewer);
+
         const idx = () => gallery.indexOf(img.src);
         prev.onclick = () =>
           openViewer(gallery[(idx() - 1 + gallery.length) % gallery.length], {
@@ -1127,67 +1149,124 @@
           });
         close.onclick = closeViewer;
         expand.onclick = toggleGameMode;
+
         viewer._keys = (e) => {
           if (e.key === "ArrowLeft") prev.onclick();
           if (e.key === "ArrowRight") next.onclick();
         };
         window.addEventListener("keydown", viewer._keys);
-        let drag = false,
-          sx = 0,
-          sy = 0;
+
+        let drag = { active: false, x: 0, y: 0 };
+        let cornerResize = { active: false, w: 0, h: 0, x: 0, y: 0 };
+        let verticalResize = {
+          active: false,
+          h: 0,
+          y: 0,
+          animationFrameId: null,
+        };
+
         viewer.addEventListener("mousedown", (e) => {
-          const overHandle = e.target.closest(".resize-handle");
+          const overHandle = e.target.closest(
+            ".resize-handle, .vertical-resize-handle"
+          );
           if (
             viewer.classList.contains("full") ||
             qs("footer", viewer).contains(e.target) ||
             overHandle
           )
             return;
-          drag = true;
-          sx = e.clientX - viewer.offsetLeft;
-          sy = e.clientY - viewer.offsetTop;
+          drag.active = true;
+          drag.x = e.clientX - viewer.offsetLeft;
+          drag.y = e.clientY - viewer.offsetTop;
           viewer.classList.add("dragging");
         });
-        window.addEventListener("mouseup", () => {
-          if (drag) {
-            drag = false;
-            viewer.classList.remove("dragging");
-          }
-        });
-        window.addEventListener("mousemove", (e) => {
-          if (!drag) return;
-          viewer.style.left = `${e.clientX - sx}px`;
-          viewer.style.top = `${e.clientY - sy}px`;
-        });
-        const handle = qs(".resize-handle", viewer);
-        let rz = false,
-          sw = 0,
-          sh = 0,
-          stx = 0,
-          sty = 0;
-        handle.addEventListener("mousedown", (e) => {
+
+        cornerHandle.addEventListener("mousedown", (e) => {
           if (viewer.classList.contains("full")) return;
           e.stopPropagation();
-          rz = true;
-          sw = viewer.offsetWidth;
-          sh = viewer.offsetHeight;
-          stx = e.clientX;
-          sty = e.clientY;
+          cornerResize.active = true;
+          cornerResize.w = viewer.offsetWidth;
+          cornerResize.h = viewer.offsetHeight;
+          cornerResize.x = e.clientX;
+          cornerResize.y = e.clientY;
         });
-        window.addEventListener("mousemove", (e) => {
-          if (rz) {
-            viewer.style.width = Math.max(320, sw + (e.clientX - stx)) + "px";
-            viewer.style.height = Math.max(200, sh + (e.clientY - sty)) + "px";
+
+        const smoothResizeLoop = () => {
+          if (!verticalResize.active) return;
+          if (viewer.originThumb) {
+            const messageToPin = viewer.originThumb.closest(".message");
+            if (messageToPin) {
+              scrollMessageIntoPosition(messageToPin, { behavior: "auto" });
+            }
           }
+          verticalResize.animationFrameId =
+            requestAnimationFrame(smoothResizeLoop);
+        };
+
+        verticalHandle.addEventListener("mousedown", (e) => {
+          if (!viewer.classList.contains("full")) return;
+          e.stopPropagation();
+          verticalResize.active = true;
+          verticalResize.h = viewer.offsetHeight;
+          verticalResize.y = e.clientY;
+          document.body.style.userSelect = "none";
+          document.body.style.cursor = "ns-resize";
+          smoothResizeLoop();
         });
-        window.addEventListener("mouseup", () => (rz = false));
-        handle.addEventListener("mouseenter", () =>
-          viewer.classList.add("no-hover-animation")
-        );
-        handle.addEventListener("mouseleave", () =>
-          viewer.classList.remove("no-hover-animation")
-        );
+
+        const onWindowMouseMove = (e) => {
+          if (drag.active) {
+            viewer.style.left = `${e.clientX - drag.x}px`;
+            viewer.style.top = `${e.clientY - drag.y}px`;
+          }
+          if (cornerResize.active) {
+            viewer.style.width =
+              Math.max(320, cornerResize.w + (e.clientX - cornerResize.x)) +
+              "px";
+            viewer.style.height =
+              Math.max(200, cornerResize.h + (e.clientY - cornerResize.y)) +
+              "px";
+          }
+          if (verticalResize.active) {
+            const newHeight = Math.max(
+              180,
+              verticalResize.h + (e.clientY - verticalResize.y)
+            );
+            viewer.style.height = `${newHeight}px`;
+          }
+        };
+
+        const onWindowMouseUp = () => {
+          if (drag.active) {
+            drag.active = false;
+            viewer.classList.remove("dragging");
+          }
+          if (cornerResize.active) cornerResize.active = false;
+
+          if (verticalResize.active) {
+            verticalResize.active = false;
+            document.body.style.userSelect = "";
+            document.body.style.cursor = "";
+            cancelAnimationFrame(verticalResize.animationFrameId);
+            // Set flags to persist the manually set height
+            viewer.dataset.isManuallyResized = "true";
+            viewer.dataset.manualHeight = viewer.style.height;
+          }
+        };
+
+        window.addEventListener("mousemove", onWindowMouseMove);
+        window.addEventListener("mouseup", onWindowMouseUp);
+
+        [cornerHandle, verticalHandle].forEach((handle) => {
+          handle.addEventListener("mouseenter", () =>
+            viewer.classList.add("no-hover-animation")
+          );
+          handle.addEventListener("mouseleave", () =>
+            viewer.classList.remove("no-hover-animation")
+          );
+        });
       }
+      // --- END: MODIFIED FUNCTION ---
 
       function closeViewer() {
         if (!viewer) return;
@@ -1227,6 +1306,8 @@
         );
       }
 
+      // --- START: MODIFIED FUNCTION ---
+      // Manages data-attributes for height persistence when toggling game mode.
       function toggleGameMode() {
         if (!viewer) return;
         const on = !body.classList.contains("game");
@@ -1244,14 +1325,24 @@
           if (viewer.dataset.origTop) viewer.style.top = viewer.dataset.origTop;
           if (viewer.dataset.origLeft)
             viewer.style.left = viewer.dataset.origLeft;
+
+          // Clean up state when exiting game mode
+          delete viewer.dataset.isManuallyResized;
+          delete viewer.dataset.manualHeight;
+          delete viewer.dataset.defaultHeight;
+
           scrollToBottom("auto");
         }
         body.classList.toggle("game", on);
         viewer.classList.toggle("full", on);
         fitViewer();
 
+        // After entering game mode and setting the initial size, store it as the default.
+        if (on && viewer) {
+          viewer.dataset.defaultHeight = viewer.style.height;
+        }
+
         if (on) {
-          // --- FIX 2: Added setTimeout and rAF to reliably scroll after all animations and layout shifts are done.
           setTimeout(() => {
             requestAnimationFrame(() => {
               if (viewer && viewer.originThumb) {
@@ -1266,6 +1357,7 @@
           }, 450);
         }
       }
+      // --- END: MODIFIED FUNCTION ---
 
       document.addEventListener("click", (e) => {
         if (e.target.matches(".edit-btn")) {
@@ -1311,7 +1403,6 @@
         }
       });
 
-      // --- FIX 1: Overhauled to provide two-step scrolling in game mode.
       qs("#prompt-form").onsubmit = async (e) => {
         e.preventDefault();
         const txt = promptInput.value.trim();
@@ -1357,7 +1448,6 @@
         }
       });
 
-      // --- FIX 2: Added rAF to prevent race conditions on resize.
       window.addEventListener("resize", () => {
         fitViewer();
         requestAnimationFrame(() => {
@@ -1369,7 +1459,6 @@
         });
       });
 
-      // --- FIX 2: Added rAF to prevent race conditions after sidebar animation.
       qs("#sidebar").addEventListener("transitionend", (e) => {
         if (e.propertyName === "transform") {
           fitViewer();
@@ -1404,18 +1493,62 @@
       }
       initializeChat();
 
+      // --- START: MODIFIED HELPER FUNCTION ---
+      // Adjusts viewer height based on its intended height vs the available space.
+      function adjustViewerHeightForPrompt() {
+        if (!body.classList.contains("game") || !viewer) return;
+
+        // 1. Determine the viewer's "intended" height. Priority: Manual > Default.
+        const intendedHeightPx =
+          viewer.dataset.manualHeight || viewer.dataset.defaultHeight;
+        if (!intendedHeightPx) return; // Not initialized yet
+        const intendedHeight = parseFloat(intendedHeightPx);
+
+        // 2. Determine max available height based on prompt's position.
+        const viewerRect = viewer.getBoundingClientRect();
+        const promptBarRect = promptBar.getBoundingClientRect();
+        const maxAvailableHeight = promptBarRect.top - viewerRect.top - GAP;
+
+        // 3. Set the new height. It's the smaller of its intended height and the max available space.
+        const newHeight = Math.max(
+          180,
+          Math.min(intendedHeight, maxAvailableHeight)
+        );
+        viewer.style.height = `${newHeight}px`;
+
+        // 4. Pin the message to the viewer's new bottom edge.
+        requestAnimationFrame(() => {
+          if (viewer.originThumb) {
+            const messageToPin = viewer.originThumb.closest(".message");
+            if (messageToPin)
+              scrollMessageIntoPosition(messageToPin, { behavior: "auto" });
+          }
+        });
+      }
+      // --- END: MODIFIED HELPER FUNCTION ---
+
+      // --- START: MODIFIED FUNCTION ---
+      // Now only triggers layout adjustment if the prompt's height actually changes.
       function resizePrompt() {
+        const oldHeight = promptInput.style.height;
+
         promptInput.style.height = "auto";
         const maxHeight = parseFloat(getComputedStyle(promptInput).maxHeight);
+
         if (promptInput.scrollHeight > maxHeight) {
+          promptInput.style.height = `${maxHeight}px`;
           promptInput.style.overflowY = "auto";
         } else {
           promptInput.style.height = `${promptInput.scrollHeight}px`;
+          promptInput.style.overflowY = "hidden";
         }
-        requestAnimationFrame(() => {
-          fitViewer();
-        });
+
+        const newHeight = promptInput.style.height;
+        if (oldHeight !== newHeight) {
+          adjustViewerHeightForPrompt();
+        }
       }
+      // --- END: MODIFIED FUNCTION ---
 
       function setupPromptAutoResize() {
         const style = getComputedStyle(promptInput);
