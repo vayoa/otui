@@ -773,20 +773,33 @@
       const sendBtn = qs("#send-btn");
       const messages = qs("#messages");
 
-      const BOTTOM_TOLERANCE = 250;
+      const BOTTOM_TOLERANCE = 8;
       const GAP_BELOW_LATEST = 60; // room left under latest message
+      const STICKY_TOLERANCE = GAP_BELOW_LATEST + 5; // 75 px
       let autoStick = true; // are we currently magnetised?
       let prevScrollTop = messages.scrollTop;
+
+      messages.addEventListener(
+        "wheel",
+        (e) => {
+          if (e.deltaY < 0) autoStick = false; // only when the user wheels UP
+        },
+        { passive: true }
+      );
 
       messages.addEventListener("scroll", () => {
         const { scrollTop, clientHeight, scrollHeight } = messages;
 
-        // ❶ user scrolled **up**  →  break free
+        // ❶ any upward movement → leave sticky mode
         if (scrollTop < prevScrollTop) autoStick = false;
 
-        // ❷ user scrolled **down** and is close enough to the end  →  re-enable stick
+        // ❷ user is scrolling *down* AND is within the magnet zone → re-stick
+        const scrolledDown = scrollTop > prevScrollTop;
         const MAGNET_TOLERANCE = GAP_BELOW_LATEST + 15; // 75 px
-        if (scrollTop + clientHeight >= scrollHeight - MAGNET_TOLERANCE) {
+        if (
+          scrolledDown &&
+          scrollTop + clientHeight >= scrollHeight - MAGNET_TOLERANCE
+        ) {
           autoStick = true;
         }
 
@@ -880,7 +893,7 @@
           const stickTolerance = 20;
           const nearBottom =
             messages.scrollTop + messages.clientHeight >=
-            messages.scrollHeight - 15; // same tiny 15 px check
+            messages.scrollHeight - STICKY_TOLERANCE;
 
           const shouldStick = autoStick && nearBottom;
 
