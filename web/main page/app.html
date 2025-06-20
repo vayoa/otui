@@ -806,9 +806,6 @@
         prevScrollTop = scrollTop;
       });
 
-      /* --- scrolling helpers --------------------------------------- */
-      // FIX: Increased the tolerance to *enter* the sticky state when a new message arrives.
-
       function atBottom() {
         return (
           messages.scrollTop + messages.clientHeight >=
@@ -858,20 +855,23 @@
         viewer.style.height = `${Math.max(180, height)}px`;
       }
 
-      function scrollLatestToPosition({ behavior = "smooth" } = {}) {
-        if (!body.classList.contains("game") || !viewer) return;
+      // --- FIX 1: Modified function to align any message, not just ones with thumbnails.
+      // It prefers aligning the .thumb, but falls back to the .bubble.
+      function scrollMessageIntoPosition(
+        message,
+        { behavior = "smooth" } = {}
+      ) {
+        if (!body.classList.contains("game") || !viewer || !message) return;
 
-        const latest = qsa(".message.assistant").at(-1);
-        if (!latest) return;
-
-        const thumb = latest.querySelector(".thumb");
-        if (!thumb) return;
+        const elementToAlign =
+          message.querySelector(".thumb") || message.querySelector(".bubble");
+        if (!elementToAlign) return;
 
         const viewerRect = viewer.getBoundingClientRect();
-        const thumbRect = thumb.getBoundingClientRect();
+        const elementRect = elementToAlign.getBoundingClientRect();
 
         const desiredTop = viewerRect.bottom + GAP;
-        const scrollDelta = thumbRect.top - desiredTop;
+        const scrollDelta = elementRect.top - desiredTop;
 
         messages.scrollBy({
           top: scrollDelta,
@@ -888,8 +888,6 @@
       async function streamText(element, text, { speed = 5 } = {}) {
         const parts = text.split(/(\s+|<br\s*\/?>)/gi).filter(Boolean);
         for (const part of parts) {
-          // This small tolerance is used to *leave* the sticky state.
-          // If the user scrolls up by more than this amount, the auto-scrolling stops.
           const stickTolerance = 20;
           const nearBottom =
             messages.scrollTop + messages.clientHeight >=
@@ -905,6 +903,7 @@
         }
       }
 
+      // --- FIX 1: Modified to return the message element so we can use it for scrolling. ---
       async function addMessage(text, { from = "assistant", img } = {}) {
         if (from === "assistant" && !img) {
           img = `https://picsum.photos/seed/${Date.now()}/1024/600`;
@@ -961,7 +960,6 @@
         );
 
         const spacer = qs("#messages-spacer");
-        // This uses the large BOTTOM_TOLERANCE to decide if we should scroll for a new message.
         const wasAtBottom = atBottom();
         messages.insertBefore(wrap, spacer);
         if (!body.classList.contains("game") && wasAtBottom) {
@@ -999,9 +997,10 @@
 
         markLatestAssistant();
 
+        // --- FIX 2: Added rAF to prevent race conditions with layout changes.
         if (body.classList.contains("game") && from === "assistant") {
           requestAnimationFrame(() =>
-            scrollLatestToPosition({ behavior: "smooth" })
+            scrollMessageIntoPosition(wrap, { behavior: "smooth" })
           );
         }
 
@@ -1016,6 +1015,8 @@
           sendBtn.disabled = false;
           promptInput.focus();
         }
+
+        return wrap; // Return the created element
       }
 
       function openViewer(src, options = {}) {
@@ -1250,12 +1251,18 @@
         fitViewer();
 
         if (on) {
-          // FIX: Wait for the viewer's animation (400ms) to finish before scrolling.
+          // --- FIX 2: Added setTimeout and rAF to reliably scroll after all animations and layout shifts are done.
           setTimeout(() => {
-            const latest = qsa(".message.assistant").at(-1);
-            if (latest) {
-              scrollLatestToPosition({ behavior: "auto" });
-            }
+            requestAnimationFrame(() => {
+              if (viewer && viewer.originThumb) {
+                const messageToScroll = viewer.originThumb.closest(".message");
+                if (messageToScroll) {
+                  scrollMessageIntoPosition(messageToScroll, {
+                    behavior: "auto",
+                  });
+                }
+              }
+            });
           }, 450);
         }
       }
@@ -1304,6 +1311,7 @@
         }
       });
 
+      // --- FIX 1: Overhauled to provide two-step scrolling in game mode.
       qs("#prompt-form").onsubmit = async (e) => {
         e.preventDefault();
         const txt = promptInput.value.trim();
@@ -1313,8 +1321,13 @@
         promptInput.value = "";
         resizePrompt();
 
-        await addMessage(userText, { from: "user" });
-        if (!body.classList.contains("game")) {
+        const userMessageEl = await addMessage(userText, { from: "user" });
+
+        if (body.classList.contains("game") && viewer) {
+          requestAnimationFrame(() => {
+            scrollMessageIntoPosition(userMessageEl, { behavior: "smooth" });
+          });
+        } else {
           scrollToBottom("auto", GAP_BELOW_LATEST);
         }
 
@@ -1343,14 +1356,32 @@
           body.classList.toggle("sidebar-collapsed");
         }
       });
+
+      // --- FIX 2: Added rAF to prevent race conditions on resize.
       window.addEventListener("resize", () => {
         fitViewer();
-        scrollLatestToPosition({ behavior: "auto" });
+        requestAnimationFrame(() => {
+          if (viewer && viewer.originThumb) {
+            const messageToScroll = viewer.originThumb.closest(".message");
+            if (messageToScroll)
+              scrollMessageIntoPosition(messageToScroll, { behavior: "auto" });
+          }
+        });
       });
+
+      // --- FIX 2: Added rAF to prevent race conditions after sidebar animation.
       qs("#sidebar").addEventListener("transitionend", (e) => {
         if (e.propertyName === "transform") {
           fitViewer();
-          scrollLatestToPosition({ behavior: "auto" });
+          requestAnimationFrame(() => {
+            if (viewer && viewer.originThumb) {
+              const messageToScroll = viewer.originThumb.closest(".message");
+              if (messageToScroll)
+                scrollMessageIntoPosition(messageToScroll, {
+                  behavior: "auto",
+                });
+            }
+          });
         }
       });
 
