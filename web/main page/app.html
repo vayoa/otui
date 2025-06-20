@@ -448,12 +448,14 @@
         z-index: 25;
         cursor: grab;
 
+        /* --- START: MODIFIED CSS --- */
+        /* Synchronized viewer's height transition with prompt's for smoother animation */
         transition: transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
           opacity 0.3s, top 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
           left 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
-          width 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
-          height 0.4s cubic-bezier(0.22, 0.61, 0.36, 1), background 0.3s ease,
-          backdrop-filter 0.3s ease;
+          width 0.4s cubic-bezier(0.22, 0.61, 0.36, 1), height 0.2s ease-out,
+          background 0.3s ease, backdrop-filter 0.3s ease;
+        /* --- END: MODIFIED CSS --- */
       }
       .viewer.no-transition {
         transition: none !important;
@@ -849,8 +851,6 @@
         gallery = [],
         assistantCount = 0;
 
-      // --- START: MODIFIED FUNCTION ---
-      // Now respects manual resize state. It only sets the height if not manually resized.
       function fitViewer() {
         if (!viewer || !viewer.classList.contains("full")) return;
 
@@ -874,7 +874,6 @@
           viewer.style.height = `${Math.max(180, height)}px`;
         }
       }
-      // --- END: MODIFIED FUNCTION ---
 
       function scrollMessageIntoPosition(
         message,
@@ -1127,8 +1126,6 @@
         };
       }
 
-      // --- START: MODIFIED FUNCTION ---
-      // Now sets data-attributes on resize to ensure persistence.
       function addViewerHandlers() {
         const img = qs("img", viewer),
           prev = qs("#prev-btn", viewer),
@@ -1248,7 +1245,6 @@
             document.body.style.userSelect = "";
             document.body.style.cursor = "";
             cancelAnimationFrame(verticalResize.animationFrameId);
-            // Set flags to persist the manually set height
             viewer.dataset.isManuallyResized = "true";
             viewer.dataset.manualHeight = viewer.style.height;
           }
@@ -1266,7 +1262,6 @@
           );
         });
       }
-      // --- END: MODIFIED FUNCTION ---
 
       function closeViewer() {
         if (!viewer) return;
@@ -1306,8 +1301,6 @@
         );
       }
 
-      // --- START: MODIFIED FUNCTION ---
-      // Manages data-attributes for height persistence when toggling game mode.
       function toggleGameMode() {
         if (!viewer) return;
         const on = !body.classList.contains("game");
@@ -1326,7 +1319,6 @@
           if (viewer.dataset.origLeft)
             viewer.style.left = viewer.dataset.origLeft;
 
-          // Clean up state when exiting game mode
           delete viewer.dataset.isManuallyResized;
           delete viewer.dataset.manualHeight;
           delete viewer.dataset.defaultHeight;
@@ -1337,7 +1329,6 @@
         viewer.classList.toggle("full", on);
         fitViewer();
 
-        // After entering game mode and setting the initial size, store it as the default.
         if (on && viewer) {
           viewer.dataset.defaultHeight = viewer.style.height;
         }
@@ -1357,7 +1348,6 @@
           }, 450);
         }
       }
-      // --- END: MODIFIED FUNCTION ---
 
       document.addEventListener("click", (e) => {
         if (e.target.matches(".edit-btn")) {
@@ -1493,30 +1483,24 @@
       }
       initializeChat();
 
-      // --- START: MODIFIED HELPER FUNCTION ---
-      // Adjusts viewer height based on its intended height vs the available space.
       function adjustViewerHeightForPrompt() {
         if (!body.classList.contains("game") || !viewer) return;
 
-        // 1. Determine the viewer's "intended" height. Priority: Manual > Default.
         const intendedHeightPx =
           viewer.dataset.manualHeight || viewer.dataset.defaultHeight;
-        if (!intendedHeightPx) return; // Not initialized yet
+        if (!intendedHeightPx) return;
         const intendedHeight = parseFloat(intendedHeightPx);
 
-        // 2. Determine max available height based on prompt's position.
         const viewerRect = viewer.getBoundingClientRect();
         const promptBarRect = promptBar.getBoundingClientRect();
         const maxAvailableHeight = promptBarRect.top - viewerRect.top - GAP;
 
-        // 3. Set the new height. It's the smaller of its intended height and the max available space.
         const newHeight = Math.max(
           180,
           Math.min(intendedHeight, maxAvailableHeight)
         );
         viewer.style.height = `${newHeight}px`;
 
-        // 4. Pin the message to the viewer's new bottom edge.
         requestAnimationFrame(() => {
           if (viewer.originThumb) {
             const messageToPin = viewer.originThumb.closest(".message");
@@ -1525,10 +1509,11 @@
           }
         });
       }
-      // --- END: MODIFIED HELPER FUNCTION ---
 
-      // --- START: MODIFIED FUNCTION ---
-      // Now only triggers layout adjustment if the prompt's height actually changes.
+      // --- START: MODIFIED SCRIPT ---
+      // Add a variable to hold the timeout ID for debouncing
+      let promptResizeTimeoutId = null;
+
       function resizePrompt() {
         const oldHeight = promptInput.style.height;
 
@@ -1545,10 +1530,13 @@
 
         const newHeight = promptInput.style.height;
         if (oldHeight !== newHeight) {
-          adjustViewerHeightForPrompt();
+          // This is the key change. We now use a debounced setTimeout.
+          // This waits for the prompt's CSS transition to finish before adjusting the viewer.
+          clearTimeout(promptResizeTimeoutId);
+          promptResizeTimeoutId = setTimeout(adjustViewerHeightForPrompt, 210); // 200ms transition + 10ms buffer
         }
       }
-      // --- END: MODIFIED FUNCTION ---
+      // --- END: MODIFIED SCRIPT ---
 
       function setupPromptAutoResize() {
         const style = getComputedStyle(promptInput);
