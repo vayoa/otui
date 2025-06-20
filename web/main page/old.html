@@ -1,1043 +1,1354 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>ROAM – AI Text Adventure</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>ROAM – AI Text Adventure</title>
 
-  <link rel="stylesheet" href="styleguide.css" />
-  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap" rel="stylesheet" />
-  <link href="https://fonts.googleapis.com/css2?family=Italiana&display=swap" rel="stylesheet" />
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styleguide.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Italiana&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&display=swap"
+      rel="stylesheet"
+    />
 
-  <style>
-    /* ───────── variables ───────── */
-    :root {
-      --sidebar-width:260px;
-      --chat-pad-x:2rem;
-      /* --prompt-bar-h:74px;  (REMOVED as height is now dynamic) */
-      --viewer-spacer:25px;
-      --gap:25px;
-      --reserve:240px;
-      --glass:rgba(17,20,34,.55);
-      --glass-strong:rgba(17,20,34,.78);
-      --stroke:rgba(255,255,255,.15);
-      --txt:#fff;
-      --blur:blur(4px);
-      --shadow:0 4px 4px rgba(0,0,0,.25);
-      --chat-max-width: 1200px; /* NEW: Max width for the chat pane */
-    }
+    <style>
+      :root {
+        --sidebar-width: 260px;
+        --chat-pad-x: 2rem;
 
-    /* ───────── base layout ───────── */
-    *,*::before,*::after{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;display:flex;overflow:hidden;font-family:Inter,system-ui,sans-serif;
-      background:radial-gradient(circle at 20% 20%,#0d111c 0%,#041423 100%);color:var(--txt);
-    }
+        --viewer-spacer: 25px;
+        --gap: 25px;
+        --reserve: 240px;
+        --glass: rgba(17, 20, 34, 0.55);
+        --glass-strong: rgba(17, 20, 34, 0.78);
+        --stroke: rgba(255, 255, 255, 0.15);
+        --txt: #fff;
+        --blur: blur(4px);
+        --shadow: 0 4px 4px rgba(0, 0, 0, 0.25);
+        --chat-max-width: 1200px;
+      }
 
-    /* ───────── sidebar ───────── */
-    #sidebar{
-      width:var(--sidebar-width);padding:1rem 1.25rem;
-      background:var(--glass);backdrop-filter:var(--blur);border-right:1px solid var(--stroke);
-      display:flex;flex-direction:column;
-      /* MODIFIED: Use a nicer easing curve and transition padding */
-      transition: width 0.4s cubic-bezier(.22,.61,.36,1),
-                  opacity 0.3s ease,
-                  padding 0.4s cubic-bezier(.22,.61,.36,1);
-      overflow: hidden;
-    }
-    body.sidebar-collapsed #sidebar {
-      width: 0;
-      opacity: 0;
-      padding-left: 0; /* Animate padding out */
-      padding-right: 0;
-    }
-    /* MODIFIED: Use flexbox for cleaner alignment */
-    #sidebar header{
-      display:flex;align-items:center;justify-content:space-between;
-      font-family:'Italiana',serif;font-size:32px;margin-bottom:1.25rem;
-    }
-    /* REMOVED: Old absolute positioning for collapse button is no longer needed */
-    /* #collapse-sidebar-btn{position:absolute; ... } */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, sans-serif;
+        background: radial-gradient(
+          circle at 20% 20%,
+          #0d111c 0%,
+          #041423 100%
+        );
+        color: var(--txt);
+      }
 
-    /* MODIFIED: New "glass" button style */
-    #new-chat-btn{
-      all: unset;
-      box-sizing: border-box;
-      display: block;
-      width: 100%;
-      text-align: center;
-      padding: 0.75rem 1rem;
-      margin-bottom: 1.25rem;
-      font-family: 'Instrument Sans', sans-serif;
-      font-size: 16px;
-      color: var(--txt);
-      cursor: pointer;
-      background: var(--glass);
-      backdrop-filter: var(--blur);
-      border: 1px solid var(--stroke);
-      border-radius: 8px;
-      box-shadow: var(--shadow);
-      transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
-    }
-    #new-chat-btn:hover {
+      #sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        z-index: 50;
+        width: var(--sidebar-width);
+        background: var(--glass);
+        backdrop-filter: var(--blur);
+        border-right: 1px solid var(--stroke);
+        transition: transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
+        overflow: hidden;
+      }
+      body.sidebar-collapsed #sidebar {
+        transform: translateX(-100%);
+      }
+      .sidebar-content-wrapper {
+        width: var(--sidebar-width);
+        padding: 1rem 1.25rem;
+        box-sizing: border-box;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+      #sidebar header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-family: "Italiana", serif;
+        font-size: 32px;
+        margin-bottom: 1.25rem;
+      }
+      #new-chat-btn {
+        all: unset;
+        box-sizing: border-box;
+        display: block;
+        width: 100%;
+        text-align: center;
+        padding: 0.5rem 1rem;
+        margin-bottom: 1.25rem;
+        font-family: "Instrument Sans", sans-serif;
+        font-size: 16px;
+        color: var(--txt);
+        cursor: pointer;
+        background: var(--glass);
+        backdrop-filter: var(--blur);
+        border: 1px solid var(--stroke);
+        border-radius: 8px;
+        transition: background-color 0.2s ease;
+      }
+      #new-chat-btn:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+      }
+
+      body.sidebar-collapsed #new-chat-btn {
+        display: none;
+      }
+
+      #sidebar nav ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+      #sidebar nav li {
+        padding: 0.6rem 0.75rem;
+        border-radius: 6px;
+        cursor: pointer;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: background 0.2s ease, transform 0.2s ease;
+      }
+      #sidebar nav li:hover {
+        background: rgba(255, 255, 255, 0.1);
+        transform: translateX(5px);
+      }
+
+      #main-content {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+
+        min-width: 0;
+        box-sizing: border-box;
+      }
+
+      #chat-wrapper {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        min-width: 0;
+        overflow-x: hidden;
+        min-height: 0;
+      }
+
+      #chat {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .chat-header {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem 0;
+        background: var(--glass);
+        backdrop-filter: var(--blur);
+        border-bottom: 1px solid var(--stroke);
+        position: relative;
+        z-index: 20;
+      }
+
+      .header-content-wrapper {
+        max-width: var(--chat-max-width);
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 var(--chat-pad-x);
+      }
+
+      .chat-header .controls {
+        position: absolute;
+        left: 1.25rem;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        gap: 0.5rem;
+      }
+
+      body.sidebar-collapsed #toggle-sidebar-btn,
+      body.sidebar-collapsed #new-chat-icon-btn {
+        display: inline-flex;
+      }
+
+      .chat-header .title {
+        font-family: "Italiana", serif;
+        font-size: 32px;
+      }
+
+      .icon-btn {
+        all: unset;
+        box-sizing: border-box;
+        cursor: pointer;
+        font-size: 1.2rem;
+        color: var(--txt);
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        transition: background-color 0.2s ease;
+      }
+      .icon-btn:hover {
+        background-color: rgba(255, 255, 255, 0.2);
+      }
+
+      #toggle-sidebar-btn,
+      #new-chat-icon-btn {
+        display: none;
+      }
+      #toggle-sidebar-btn,
+      #new-chat-icon-btn,
+      #collapse-sidebar-btn {
+        background: var(--glass);
+        backdrop-filter: var(--blur);
+        border: 1px solid var(--stroke);
+      }
+
+      .messages {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column-reverse;
+        gap: 2.25rem;
+        padding: 2rem
+          max(var(--chat-pad-x), calc((100% - var(--chat-max-width)) / 2))
+          2.25rem;
+        box-sizing: border-box;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        scroll-behavior: smooth;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes pillIn {
+        from {
+          opacity: 0;
+          transform: translateX(-8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+      .message {
+        max-width: 720px;
+        align-self: flex-start;
+        line-height: 1.6;
+        position: relative;
+      }
+      .message.user {
+        align-self: flex-end;
+        text-align: right;
+      }
+      .bubble {
+        font-family: "Instrument Sans", sans-serif;
+        font-size: 18px;
+      }
+
+      .bubble[contenteditable="true"] {
+        border: 1px solid var(--stroke);
+        background: var(--glass);
+        backdrop-filter: var(--blur);
+        border-radius: 7px;
+        box-shadow: var(--shadow);
+        padding: 7px;
+        margin: 14px 0 14px 0;
+        outline: none;
+      }
+
+      .message.user .bubble {
+        background: var(--glass);
+        border: 1px solid var(--stroke);
+        border-radius: 10px;
+        padding: 7px;
+        margin: 14px 0 14px 0;
+        backdrop-filter: var(--blur);
+        box-shadow: var(--shadow);
+      }
+      .attachments {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        margin-bottom: 0.75rem;
+      }
+      .thumb {
+        width: 220px;
+        height: 28px;
+        flex: 0 0 220px;
+        border-radius: 7px;
+        cursor: pointer;
+        border: 1px solid var(--stroke);
+        backdrop-filter: var(--blur);
+        box-shadow: var(--shadow);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        position: relative;
+        overflow: hidden;
+      }
+      .thumb::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          to right,
+          rgba(255, 255, 255, 0) 0%,
+          rgba(255, 255, 255, 0.08) 50%,
+          rgba(255, 255, 255, 0) 100%
+        );
+        background-size: 440px 100%;
+        animation: shimmer 1.5s infinite linear;
+        transition: opacity 0.3s ease;
+      }
+      .thumb:hover {
         transform: translateY(-2px);
         box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
-        background-color: rgba(25, 29, 48, 0.7);
-    }
+      }
+      .thumb img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        clip-path: inset(0 100% 0 0);
+        opacity: 0;
+        transition: clip-path 0.6s ease-out, opacity 0.4s ease-in;
+      }
+      .thumb.loaded::before {
+        opacity: 0;
+      }
+      .thumb.loaded img {
+        clip-path: inset(0 0 0 0);
+        opacity: 1;
+      }
+      .pill {
+        min-width: 135px;
+        padding: 0 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--stroke);
+        background: var(--glass);
+        backdrop-filter: var(--blur);
+        border-radius: 7px;
+        box-shadow: var(--shadow);
+        font-family: "Pixelify Sans", sans-serif;
+        font-size: 15px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+      .message-actions {
+        position: absolute;
+        bottom: -1.3rem;
+        left: 0;
+        display: flex;
+        gap: 0.4rem;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      .message:hover .message-actions {
+        opacity: 1;
+      }
+      .message-actions button {
+        all: unset;
+        cursor: pointer;
+        font-family: "Pixelify Sans", sans-serif;
+        font-size: 15px;
+        color: var(--txt);
+      }
 
-    body.sidebar-collapsed #new-chat-btn{display:none}
+      .pill:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
+      }
+      .pill .ellipsis,
+      .pill .number {
+        opacity: 0;
+        display: inline-block;
+        animation: slideIn 0.3s ease-out forwards;
+      }
+      @keyframes slideIn {
+        from {
+          transform: translateX(-8px);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+      .pill .ellipsis {
+        animation-delay: calc(var(--base-delay) + 0.1s);
+      }
+      .pill .number {
+        animation-delay: calc(var(--base-delay) + 0.4s);
+      }
 
-    #sidebar nav ul{list-style:none;margin:0;padding:0;flex:1;overflow-y:auto;overflow-x:hidden}
-    /* MODIFIED: Improved list item styling and hover animation */
-    #sidebar nav li{
-      padding:.6rem .75rem;
-      border-radius:6px;
-      cursor:pointer;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      transition:background .2s ease, transform .2s ease;
-    }
-    #sidebar nav li:hover{
-      background:rgba(255,255,255,.1);
-      transform: translateX(5px);
-    }
+      .viewer {
+        position: absolute;
+        width: 720px;
+        max-width: calc(100% - var(--chat-pad-x) * 2);
+        background: var(--glass-strong);
+        backdrop-filter: var(--blur);
+        border: 1px solid var(--stroke);
+        border-radius: 7px;
+        padding: 11.5px;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        z-index: 25;
+        cursor: grab;
 
-    /* MODIFIED: New wrapper for the entire main content area (header + chat) */
-    #main-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-width: 0; /* Prevents flexbox overflow issues */
-      position: relative; /* For child positioning */
-      height: 100vh; /* Ensure it takes full viewport height */
-    }
+        transition: transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
+          opacity 0.3s, top 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
+          left 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
+          width 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
+          height 0.4s cubic-bezier(0.22, 0.61, 0.36, 1), background 0.3s ease,
+          backdrop-filter 0.3s ease;
+      }
+      .viewer.no-transition {
+        transition: none !important;
+      }
+      .viewer.full {
+        pointer-events: none;
+      }
+      body.game .viewer.full {
+        background: rgba(17, 20, 34, 0.9);
+        backdrop-filter: blur(12px);
+      }
+      .viewer.full footer,
+      .viewer.full footer *,
+      .viewer.full .resize-handle {
+        pointer-events: auto;
+      }
+      .viewer.full .resize-handle {
+        display: none;
+      }
+      .viewer img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        border-radius: 7px;
+        pointer-events: none;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+      }
+      .viewer footer {
+        position: absolute;
+        bottom: 11.5px;
+        left: 11.5px;
+        height: 29px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 6px;
+        background: var(--glass);
+        backdrop-filter: var(--blur);
+        border: 1px solid var(--stroke);
+        border-radius: 7px;
+        user-select: none;
+      }
+      .viewer footer .chevrons {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .viewer footer button {
+        all: unset;
+        min-width: 26px;
+        text-align: center;
+        cursor: pointer;
+        font-size: 1rem;
+      }
+      .viewer footer .indicator {
+        color: var(--txt);
+        margin: 0 4px;
+        font-size: 0.9rem;
+        user-select: none;
+      }
+      .resize-handle {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: 36px;
+        height: 36px;
+        cursor: se-resize;
+      }
+      .resize-handle::after {
+        content: "";
+        position: absolute;
+        right: 6px;
+        bottom: 6px;
+        width: 16px;
+        height: 16px;
+        border-right: 1px solid var(--stroke);
+        border-bottom: 1px solid var(--stroke);
+      }
+      .viewer:not(.full).dragging {
+        transform: scale(0.96);
+        transform-origin: center;
+        cursor: grabbing;
+        box-shadow: 0 12px 16px rgba(0, 0, 0, 0.4);
+      }
+      .viewer:not(.full):not(.dragging):hover {
+        transform: scale(0.98);
+        transform-origin: center;
+        box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
+      }
+      .viewer.no-hover-animation:not(.dragging):hover {
+        transform: none !important;
+        box-shadow: none !important;
+      }
 
-    /* MODIFIED: chat-wrapper now has a different role */
-    #chat-wrapper {
-      flex: 1;
-      display: flex;
-      justify-content: center;
-      min-width: 0; /* Prevents flexbox overflow issues */
-      overflow-x: hidden;
-      min-height: 0; /* Important for shrinking in a flex column */
-    }
+      .viewer::before {
+        content: "";
+        position: absolute;
+        inset: 11.5px;
+        border-radius: 7px;
+        background: linear-gradient(
+          to right,
+          rgba(255, 255, 255, 0) 0%,
+          rgba(255, 255, 255, 0.04) 50%,
+          rgba(255, 255, 255, 0) 100%
+        );
+        background-size: 800px 100%;
+        animation: shimmer 2s infinite linear;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        z-index: 1;
+        pointer-events: none;
+      }
+      .viewer.loading::before {
+        opacity: 1;
+      }
 
-    /* ───────── chat pane ───────── */
-    #chat {
-      position:relative;
-      /* MODIFIED: Width is now 100% to push scrollbar to edge */
-      width: 100%;
-      height: 100%; /* Fill the chat-wrapper */
-      /* REMOVED: max-width is now handled by padding on children */
-      display:flex;
-      flex-direction:column;
-      min-height: 0;
-      /* REMOVED: No longer need overflow:hidden, which trapped the viewer */
-    }
+      @keyframes blurFade {
+        0% {
+          opacity: 0;
+          filter: blur(6px) brightness(0.9);
+          transform: scale(1.02);
+        }
+        100% {
+          opacity: 1;
+          filter: blur(0) brightness(1);
+          transform: none;
+        }
+      }
+      @keyframes slideLeftIn {
+        0% {
+          opacity: 0;
+          filter: blur(4px), drop-shadow(0 10px 20px rgba(0, 0, 0, 0.5));
+          transform: translateX(-28px);
+        }
+        100% {
+          opacity: 1;
+          filter: blur(0), drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+          transform: none;
+        }
+      }
+      @keyframes slideRightIn {
+        0% {
+          opacity: 0;
+          filter: blur(4px), drop-shadow(0 10px 20px rgba(0, 0, 0, 0.5));
+          transform: translateX(28px);
+        }
+        100% {
+          opacity: 1;
+          filter: blur(0), drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+          transform: none;
+        }
+      }
 
-    .chat-header{
-      flex:0 0 auto;display:flex;align-items:center;justify-content:center;
-      /* MODIFIED: Vertical padding only, as horizontal is handled by inner wrapper */
-      padding: 1rem 0;
-      background:var(--glass);backdrop-filter:var(--blur);
-      border-bottom:1px solid var(--stroke);position:relative;z-index:20;
-    }
+      .messages {
+        transition: padding-bottom 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
+          padding-top 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
+      }
+      @keyframes thumbReveal {
+        from {
+          clip-path: inset(0 100% 0 0);
+          opacity: 0;
+          filter: blur(30px);
+        }
+        to {
+          clip-path: inset(0 0 0 0);
+          opacity: 1;
+          filter: blur(0);
+        }
+      }
+      @keyframes shimmer {
+        0% {
+          background-position: -440px 0;
+        }
+        100% {
+          background-position: 440px 0;
+        }
+      }
 
-    /* MODIFIED: New wrapper to center header content, matching chat width */
-    .header-content-wrapper {
-      width: 100%;
-      max-width: var(--chat-max-width);
-      margin: 0 auto;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      padding: 0 var(--chat-pad-x);
-    }
+      #prompt-form {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        padding: 0
+          max(var(--chat-pad-x), calc((100% - var(--chat-max-width)) / 2));
+        box-sizing: border-box;
+        margin-bottom: 2rem;
+      }
+      #prompt-input {
+        flex: 1;
+        resize: none;
+        padding: 0.8rem 1.1rem;
+        border: 1px solid var(--stroke);
+        border-radius: 20px;
+        background: var(--glass);
+        backdrop-filter: var(--blur);
+        box-shadow: var(--shadow);
+        font-family: "Instrument Sans", sans-serif;
+        font-size: 18px;
+        color: #fff;
+        overflow-y: hidden;
+        transition: height 0.2s ease-out;
+      }
+      #prompt-input::-webkit-scrollbar {
+        width: 8px;
+      }
+      #prompt-input::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      #prompt-input::-webkit-scrollbar-thumb {
+        background-color: rgba(255, 255, 255, 0.25);
+        border-radius: 4px;
+      }
+      #prompt-input::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(255, 255, 255, 0.4);
+      }
 
-    /* MODIFIED: Controls are now positioned relative to the new inner wrapper */
-    .chat-header .controls{
-      position:absolute;
-      left: var(--chat-pad-x); /* Keep padding consistent */
-      display:flex;
-      gap:.5rem
-    }
+      #send-btn {
+        all: unset;
+        padding: 0.65rem 1.1rem;
+        border-radius: 8px;
+        cursor: pointer;
+        background: linear-gradient(135deg, #d67aff 0%, #7967ff 100%);
+        box-shadow: var(--shadow);
+      }
 
-    body.sidebar-collapsed #toggle-sidebar-btn,
-    body.sidebar-collapsed #new-chat-icon-btn{display:inline-flex}
+      @media (max-width: 768px) {
+        body:not(.sidebar-collapsed) #sidebar {
+          width: 100%;
+        }
+        body:not(.sidebar-collapsed) #main-content {
+          padding-left: 0;
+        }
+      }
+    </style>
+  </head>
 
-    .chat-header .title{font-family:'Italiana',serif;font-size:32px}
+  <body>
+    <aside id="sidebar">
+      <div class="sidebar-content-wrapper">
+        <header>
+          ROAM <button id="collapse-sidebar-btn" class="icon-btn">☰</button>
+        </header>
+        <button id="new-chat-btn">+ Start a new adventure</button>
+        <nav><ul id="chat-list"></ul></nav>
+      </div>
+    </aside>
 
-    .icon-btn {
-      all: unset;
-      box-sizing: border-box;
-      cursor: pointer;
-      font-size: 1.2rem;
-      color: var(--txt);
-      width: 38px;
-      height: 38px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 50%;
-      transition: background-color .2s ease, transform .2s ease;
-    }
-    .icon-btn:hover {
-      background-color: rgba(255,255,255,0.1);
-      transform: scale(1.1);
-    }
-
-    #toggle-sidebar-btn, #new-chat-icon-btn { display: none; }
-
-
-    /* messages list */
-    .messages{
-      flex:1 1 auto;
-      min-height:0;
-      overflow-y:auto;
-      display:flex;flex-direction:column-reverse;
-      gap:2.25rem;
-      /* MODIFIED: Use responsive padding to center content and push scrollbar to edge */
-      padding: 2rem max(var(--chat-pad-x), calc((100% - var(--chat-max-width)) / 2)) 2.25rem;
-      box-sizing: border-box;
-      -webkit-overflow-scrolling:touch;
-      overscroll-behavior:contain;
-      scroll-behavior:smooth;
-    }
-
-    /* bubbles / attachments */
-    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-    @keyframes pillIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
-    /* MODIFIED: Horizontal margin removed, padding is now on parent .messages */
-    .message{
-      max-width:720px;align-self:flex-start;line-height:1.6;position:relative;
-    }
-    .message.user{align-self:flex-end;text-align:right}
-    .bubble{font-family:'Instrument Sans',sans-serif;font-size:18px}
-
-    .bubble[contenteditable="true"] {
-      border:1px solid var(--stroke);background:var(--glass);backdrop-filter:var(--blur);
-      border-radius:7px;box-shadow:var(--shadow);
-      padding:7px;margin:14px 0 14px 0;
-      outline: none;
-    }
-
-    .message.user .bubble{
-      background:var(--glass);border:1px solid var(--stroke);border-radius:10px;
-      padding:7px;margin:14px 0 14px 0;backdrop-filter:var(--blur);box-shadow:var(--shadow)
-    }
-    .attachments{display:flex;align-items:center;gap:11px;margin-bottom:.75rem}
-    .thumb {
-      width: 220px; height: 28px; flex: 0 0 220px; border-radius: 7px; cursor: pointer;
-      border: 1px solid var(--stroke); backdrop-filter: var(--blur); box-shadow: var(--shadow);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      position: relative;
-      overflow: hidden;
-    }
-    .thumb::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(to right,
-        rgba(255,255,255,0) 0%,
-        rgba(255,255,255,0.08) 50%,
-        rgba(255,255,255,0) 100%);
-      background-size: 440px 100%;
-      animation: shimmer 1.5s infinite linear;
-      transition: opacity 0.3s ease;
-    }
-    .thumb:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
-    }
-    .thumb img {
-      position: absolute;
-      inset: 0;
-      width: 100%; height: 100%;
-      object-fit: cover;
-      clip-path: inset(0 100% 0 0);
-      opacity: 0;
-      transition: clip-path 0.6s ease-out, opacity 0.4s ease-in;
-    }
-    .thumb.loaded::before {
-      opacity: 0;
-    }
-    .thumb.loaded img {
-      clip-path: inset(0 0 0 0);
-      opacity: 1;
-    }
-    .pill{
-      min-width:135px;padding:0 8px;display:flex;align-items:center;justify-content:center;
-      border:1px solid var(--stroke);background:var(--glass);backdrop-filter:var(--blur);
-      border-radius:7px;box-shadow:var(--shadow);font-family:'Pixelify Sans',sans-serif;font-size:15px;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .message-actions{position:absolute;bottom:-1.3rem;left:0;display:flex;gap:.4rem;opacity:0;transition:opacity .2s}
-    .message:hover .message-actions{opacity:1}
-    .message-actions button{all:unset;cursor:pointer;font-family:'Pixelify Sans',sans-serif;font-size:15px;color:var(--txt)}
-
-    .pill:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
-    }
-    .pill .ellipsis,
-    .pill .number {
-      opacity: 0;
-      display: inline-block;
-      animation: slideIn 0.3s ease-out forwards;
-    }
-    @keyframes slideIn {
-      from { transform: translateX(-8px); opacity: 0; }
-      to   { transform: translateX(0);    opacity: 1; }
-    }
-    .pill .ellipsis {
-      animation-delay: calc(var(--base-delay) + 0.1s);
-    }
-    .pill .number {
-      animation-delay: calc(var(--base-delay) + 0.4s);
-    }
-
-    /* ───────── floating viewer ───────── */
-    .viewer{
-      position:absolute;
-      /* MODIFIED: Removed top/left, will be set by JS for full freedom of movement */
-      width:720px;max-width:calc(100% - var(--chat-pad-x)*2);
-      background:var(--glass-strong);backdrop-filter:var(--blur);
-      border:1px solid var(--stroke);border-radius:7px;padding:11.5px;
-      box-shadow:var(--shadow);overflow:hidden;z-index:25;
-      cursor: grab;
-
-       transition:
-        transform .4s cubic-bezier(.22,.61,.36,1),
-        opacity  .3s,
-        top      .4s cubic-bezier(.22,.61,.36,1),
-        left     .4s cubic-bezier(.22,.61,.36,1),
-        width    .4s cubic-bezier(.22,.61,.36,1),
-        height   .4s cubic-bezier(.22,.61,.36,1);
-    }
-    .viewer.no-transition { transition:none!important }
-    .viewer.full{pointer-events:none;}
-    .viewer.full footer,
-    .viewer.full footer *,
-    .viewer.full .resize-handle{pointer-events:auto;}
-    .viewer img{
-      width:100%;height:100%;object-fit:contain;border-radius:7px;pointer-events:none;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
-    }
-    .viewer footer{
-      position:absolute;bottom:11.5px;left:11.5px;height:29px;
-      display:flex;align-items:center;gap:10px;padding:0 6px;
-      background:var(--glass);backdrop-filter:var(--blur);
-      border:1px solid var(--stroke);border-radius:7px;user-select:none;
-    }
-    .viewer footer .chevrons{
-      display:flex;align-items:center;gap:4px;
-    }
-    .viewer footer button{all:unset;min-width:26px;text-align:center;cursor:pointer;font-size:1rem}
-    .viewer footer .indicator {
-      color: var(--txt);
-      margin: 0 4px;
-      font-size: 0.9rem;
-      user-select: none;
-    }
-    .resize-handle {
-      position: absolute;
-      right: 0;
-      bottom: 0;
-      width: 36px;
-      height: 36px;
-      cursor: se-resize;
-    }
-    .resize-handle::after {
-      content: '';
-      position: absolute;
-      right: 6px;
-      bottom: 6px;
-      width: 16px;
-      height: 16px;
-      border-right: 1px solid var(--stroke);
-      border-bottom: 1px solid var(--stroke);
-    }
-    .viewer:not(.full).dragging {
-      transform: scale(0.96);
-      cursor: grabbing;
-      box-shadow: 0 12px 16px rgba(0, 0, 0, 0.4);
-    }
-    .viewer:not(.full):not(.dragging):hover {
-      transform: scale(0.98);
-      box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
-    }
-    .viewer.no-hover-animation:not(.dragging):hover {
-      transform: none !important;
-      box-shadow: none !important;
-    }
-
-    /* ─── viewer image transition helpers ─── */
-    /* NEW: Add loading shimmer effect for viewer */
-    .viewer::before {
-      content: '';
-      position: absolute;
-      inset: 11.5px; /* Match padding */
-      border-radius: 7px; /* Match image radius */
-      background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.04) 50%, rgba(255,255,255,0) 100%);
-      background-size: 800px 100%;
-      animation: shimmer 2s infinite linear;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-      z-index: 1; /* Sit above img but below footer */
-      pointer-events: none;
-    }
-    .viewer.loading::before {
-      opacity: 1;
-    }
-
-    @keyframes blurFade {
-      0%   { opacity:0; filter:blur(6px)  brightness(.9); transform:scale(1.02); }
-      100% { opacity:1; filter:blur(0)    brightness(1);  transform:none; }
-    }
-    @keyframes slideLeftIn  {
-      0%   { opacity:0; filter:blur(4px), drop-shadow(0 10px 20px rgba(0,0,0,0.5)); transform:translateX(-28px); }
-      100% { opacity:1; filter:blur(0), drop-shadow(0 4px 12px rgba(0,0,0,0.5));   transform:none; }
-    }
-    @keyframes slideRightIn {
-      0%   { opacity:0; filter:blur(4px), drop-shadow(0 10px 20px rgba(0,0,0,0.5)); transform:translateX( 28px); }
-      100% { opacity:1; filter:blur(0), drop-shadow(0 4px 12px rgba(0,0,0,0.5));   transform:none; }
-    }
-
-    .messages {
-      transition:
-        padding-bottom .4s cubic-bezier(.22,.61,.36,1),
-        padding-top .4s cubic-bezier(.22,.61,.36,1);
-    }
-    @keyframes thumbReveal { from{clip-path:inset(0 100% 0 0); opacity:0; filter:blur(30px)} to{clip-path:inset(0 0 0 0); opacity:1; filter:blur(0)}}
-    @keyframes shimmer {
-      0%   { background-position: -440px 0; }
-      100% { background-position: 440px 0;  }
-    }
-
-    /* ───────── prompt bar ───────── */
-    #prompt-form {
-      flex: 0 0 auto;
-      display: flex;
-      align-items: center;
-      gap: .8rem;
-      /* MODIFIED: Use responsive padding to center content column */
-      padding: 0 max(var(--chat-pad-x), calc((100% - var(--chat-max-width)) / 2));
-      box-sizing: border-box;
-      margin-bottom: 2rem;
-    }
-    #prompt-input {
-      flex: 1;
-      resize: none;
-      padding: .8rem 1.1rem;
-      border: 1px solid var(--stroke);
-      border-radius: 20px;
-      background: var(--glass);
-      backdrop-filter: var(--blur);
-      box-shadow: var(--shadow);
-      font-family: 'Instrument Sans', sans-serif;
-      font-size: 18px;
-      color: #fff;
-      /* MODIFIED: Hide scrollbar by default; JS will show it when needed */
-      overflow-y: hidden;
-    }
-    /* NEW: Nicer scrollbar for the prompt input */
-    #prompt-input::-webkit-scrollbar {
-      width: 8px;
-    }
-    #prompt-input::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    #prompt-input::-webkit-scrollbar-thumb {
-      background-color: rgba(255, 255, 255, 0.25);
-      border-radius: 4px;
-    }
-    #prompt-input::-webkit-scrollbar-thumb:hover {
-      background-color: rgba(255, 255, 255, 0.4);
-    }
-
-    #send-btn{all:unset;padding:.65rem 1.1rem;border-radius:8px;cursor:pointer;
-      background:linear-gradient(135deg,#d67aff 0%,#7967ff 100%);box-shadow:var(--shadow)}
-  </style>
-</head>
-
-<body>
-  <!-- sidebar -->
-  <aside id="sidebar">
-    <header>ROAM <button id="collapse-sidebar-btn" class="icon-btn">☰</button></header>
-    <button id="new-chat-btn">+ Start a new adventure</button>
-    <nav><ul id="chat-list"></ul></nav>
-  </aside>
-
-  <!-- MODIFIED: New main content wrapper to fix header width and centering -->
-  <div id="main-content">
-    <header class="chat-header">
-      <!-- MODIFIED: Wrapper for header content to align with chat pane -->
-      <div class="header-content-wrapper">
+    <div id="main-content">
+      <header class="chat-header">
         <div class="controls">
           <button id="toggle-sidebar-btn" class="icon-btn">☰</button>
-          <button id="new-chat-icon-btn" class="icon-btn">➕</button>
+          <!-- FIX: Changed icon from emoji to text for consistency. -->
+          <button
+            id="new-chat-icon-btn"
+            class="icon-btn"
+            title="Start a new adventure"
+          >
+            +
+          </button>
         </div>
-        <span class="title">Adventure</span>
+        <div class="header-content-wrapper">
+          <span class="title">Adventure</span>
+        </div>
+      </header>
+
+      <div id="chat-wrapper">
+        <main id="chat">
+          <div id="messages" class="messages"></div>
+
+          <form id="prompt-form">
+            <textarea
+              id="prompt-input"
+              placeholder="What would you like to do?"
+              rows="1"
+            ></textarea>
+            <button id="send-btn">➤</button>
+          </form>
+        </main>
       </div>
-    </header>
-
-    <!-- This wrapper now just centers the chat pane -->
-    <div id="chat-wrapper">
-      <main id="chat">
-        <div id="messages" class="messages"></div>
-
-        <form id="prompt-form">
-          <textarea id="prompt-input" placeholder="What would you like to do?" rows="1"></textarea>
-          <button id="send-btn">➤</button>
-        </form>
-      </main>
     </div>
-  </div>
 
-  <!-- MODIFIED: Viewer template moved to be a direct child of <body> for freedom of movement -->
-  <div id="viewer-template" class="viewer" style="display:none">
-    <img alt="preview">
-    <footer>
-      <button id="expand-btn">⤢</button>
-      <div class="chevrons">
-        <button id="prev-btn">❮</button>
-        <span class="indicator">0/0</span>
-        <button id="next-btn">❯</button>
-      </div>
-      <button id="close-btn">✕</button>
-    </footer>
-    <div class="resize-handle"></div>
-  </div>
+    <div id="viewer-template" class="viewer" style="display: none">
+      <img alt="preview" />
+      <footer>
+        <button id="expand-btn">⤢</button>
+        <div class="chevrons">
+          <button id="prev-btn">❮</button>
+          <span class="indicator">0/0</span>
+          <button id="next-btn">❯</button>
+        </div>
+        <button id="close-btn">✕</button>
+      </footer>
+      <div class="resize-handle"></div>
+    </div>
+    <script>
+      const qs = (s, p = document) => p.querySelector(s);
+      const qsa = (s, p = document) => [...p.querySelectorAll(s)];
+      const css = (n) =>
+        parseInt(
+          getComputedStyle(document.documentElement).getPropertyValue(n)
+        );
 
+      let viewerState = {};
 
-  <script>
-    /* helpers & constants */
-    const qs =(s,p=document)=>p.querySelector(s);
-    const qsa=(s,p=document)=>[...p.querySelectorAll(s)];
-    const css=n=>parseInt(getComputedStyle(document.documentElement).getPropertyValue(n));
+      const SPACER = css("--viewer-spacer");
+      const MSG_STAGE = 150;
+      const GAP = css("--gap");
+      const RESERVE = css("--reserve");
 
-    // Store last viewer size and position
-    let viewerState = {};
+      const body = document.body;
+      const chat = qs("#chat");
+      const header = qs(".chat-header");
+      const mainContent = qs("#main-content");
+      const promptBar = qs("#prompt-form");
+      const promptInput = qs("#prompt-input");
+      const sendBtn = qs("#send-btn");
+      const messages = qs("#messages");
 
-    // for slide-direction detection
-    let lastViewerIndex = -1;
+      messages.addEventListener(
+        "wheel",
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: false }
+      );
 
-    const SPACER  = css('--viewer-spacer');
-    const GAP     = css('--gap');
-    const RESERVE = css('--reserve');
+      let viewer = null,
+        gallery = [],
+        assistantCount = 0;
+      const BASE_PAD = parseInt(getComputedStyle(messages).paddingBottom) || 0;
+      const BASE_PAD_TOP = parseInt(getComputedStyle(messages).paddingTop) || 0;
 
-    /* refs */
-    const body        = document.body;
-    const chat        = qs('#chat');
-    const header      = qs('.chat-header');
-    const promptBar   = qs('#prompt-form');
-    const promptInput = qs('#prompt-input');
-    const sendBtn     = qs('#send-btn');
-    const messages    = qs('#messages');
+      function fitViewer() {
+        if (!viewer || !viewer.classList.contains("full")) return;
 
-    messages.addEventListener('wheel', e => { e.stopPropagation(); }, { passive: false });
+        const headerRect = header.getBoundingClientRect();
+        const promptBarRect = promptBar.getBoundingClientRect();
+        const promptInputRect = promptInput.getBoundingClientRect();
+        const sendBtnRect = sendBtn.getBoundingClientRect();
+        const chatRect = chat.getBoundingClientRect();
 
-    /* state */
-    let viewer=null, gallery=[], assistantCount=0;
-    const BASE_PAD = parseInt(getComputedStyle(messages).paddingBottom) || 0;
-    const BASE_PAD_TOP = parseInt(getComputedStyle(messages).paddingTop) || 0;
+        const left = promptInputRect.left;
+        const top = headerRect.bottom + SPACER;
+        const width = sendBtnRect.right - promptInputRect.left;
+        const height =
+          chatRect.height - SPACER - promptBarRect.height - RESERVE;
 
-    /* layout */
-    // MODIFIED: Rewritten to be more robust and work with the viewer as a child of <body>
-    function fitViewer(){
-      if(!viewer || !viewer.classList.contains('full')) return;
-
-      const headerRect = header.getBoundingClientRect();
-      const promptBarRect = promptBar.getBoundingClientRect();
-      const promptInputRect = promptInput.getBoundingClientRect();
-      const sendBtnRect = sendBtn.getBoundingClientRect();
-      const chatRect = chat.getBoundingClientRect();
-
-      const left = promptInputRect.left;
-      const top = headerRect.bottom + SPACER;
-      const width = sendBtnRect.right - promptInputRect.left;
-      const height = chatRect.height - SPACER - promptBarRect.height - RESERVE;
-
-      viewer.style.left   = `${left}px`;
-      viewer.style.top    = `${top}px`;
-      viewer.style.width  = `${width}px`;
-      viewer.style.height = `${Math.max(180,height)}px`;
-    }
-
-    function updateMessagePadding() {
-      if (viewer && viewer.classList.contains('full')) {
-        const viewerRect = viewer.getBoundingClientRect();
-        const messagesRect = messages.getBoundingClientRect();
-        const requiredTopPad = (viewerRect.bottom - messagesRect.top) + GAP;
-        messages.style.paddingTop = `${requiredTopPad}px`;
-
-        const latest = messages.querySelector('.message.latest') || messages.lastElementChild;
-        const bh = latest ? latest.getBoundingClientRect().height : 70;
-        const viewerBottom = viewer.getBoundingClientRect().bottom;
-        const promptTop = promptBar.getBoundingClientRect().top;
-        let pad = promptTop - (viewerBottom + GAP + bh);
-        if (pad < 0) pad = 0;
-        messages.style.paddingBottom = pad + 'px';
-      } else {
-        messages.style.paddingTop = `${BASE_PAD_TOP}px`;
-        messages.style.paddingBottom = `${BASE_PAD}px`;
+        viewer.style.left = `${left}px`;
+        viewer.style.top = `${top}px`;
+        viewer.style.width = `${width}px`;
+        viewer.style.height = `${Math.max(180, height)}px`;
       }
-    }
 
-    function scrollLatest(){
-      // MODIFIED: Use element.scrollTo for smooth scrolling that works reliably.
-      // The condition checks if the user is near the bottom of the chat.
-      if (messages.scrollTop <= 40) {
-        messages.scrollTo({
-          top: 0, // In column-reverse, top of scroll is the visual bottom.
-          behavior: 'smooth'
+      function updateLayout({ smooth = false } = {}) {
+        if (!body.classList.contains("game")) {
+          messages.style.paddingBottom = `${BASE_PAD}px`;
+          if (messages.scrollTop < 100) {
+            messages.scrollTo({ top: 0, behavior: smooth ? "smooth" : "auto" });
+          }
+          return;
+        }
+
+        const latest = messages.firstElementChild;
+        if (!viewer || !latest) {
+          messages.style.paddingBottom = `${BASE_PAD}px`;
+          return;
+        }
+
+        const thumb = latest.querySelector(".thumb");
+        if (!thumb) {
+          messages.style.paddingBottom = `${BASE_PAD}px`;
+          return;
+        }
+
+        const msgHeight = latest.offsetHeight;
+        const targetPadding =
+          msgHeight < MSG_STAGE ? MSG_STAGE - msgHeight : BASE_PAD;
+        messages.style.paddingBottom = `${targetPadding}px`;
+
+        requestAnimationFrame(() => {
+          const viewerRect = viewer.getBoundingClientRect();
+          const thumbRect = thumb.getBoundingClientRect();
+
+          const desiredTop = viewerRect.bottom + GAP;
+          const scrollAdjust = thumbRect.top - desiredTop;
+
+          messages.scrollTo({
+            top: messages.scrollTop + scrollAdjust,
+            behavior: smooth ? "smooth" : "auto",
+          });
         });
       }
-    }
 
-
-    function markLatestAssistant(){
-      qsa('.message.assistant').forEach(m=>m.classList.remove('latest'));
-      const list=qsa('.message.assistant');
-      if(list.length) list.at(-1).classList.add('latest');
-    }
-
-    /* add message */
-    function addMessage(text,{from='assistant',img}={}){
-      if(from==='assistant'&&!img){
-        img=`https://picsum.photos/seed/${Date.now()}/1024/600`;
+      function scrollLatest() {
+        setTimeout(() => updateLayout({ smooth: false }), 100);
       }
-      const wrap=document.createElement('div');
-      wrap.className=`message ${from}`;
-      wrap.style.animation='fadeIn .2s forwards';
 
-      const att=document.createElement('div'); att.className='attachments';
-      if(img){
-        const wrapper = document.createElement('div');
-        wrapper.className = 'thumb';
-        wrapper.onclick = () => openViewer(img, wrapper);
-
-        const th = document.createElement('img');
-        th.src = img;
-
-        wrapper.appendChild(th);
-        att.appendChild(wrapper);
-
-        if(!gallery.includes(img)) gallery.push(img);
+      function markLatestAssistant() {
+        qsa(".message.assistant").forEach((m) => m.classList.remove("latest"));
+        const list = qsa(".message.assistant");
+        if (list.length) list.at(-1).classList.add("latest");
       }
-      if(from==='assistant'){
-        assistantCount++;
-        if (assistantCount % 2 === 0) {
-          const r = 1 + Math.floor(Math.random() * 20);
-          const pill = document.createElement('span');
-          pill.className = 'pill';
-          pill.innerHTML = `
+
+      function addMessage(text, { from = "assistant", img } = {}) {
+        if (from === "assistant" && !img) {
+          img = `https://picsum.photos/seed/${Date.now()}/1024/600`;
+        }
+        const wrap = document.createElement("div");
+        wrap.className = `message ${from}`;
+        wrap.style.animation = "fadeIn .2s forwards";
+
+        const att = document.createElement("div");
+        att.className = "attachments";
+        if (img) {
+          const wrapper = document.createElement("div");
+          wrapper.className = "thumb";
+          wrapper.onclick = () =>
+            openViewer(img, { fromThumb: wrapper, animationHint: "open" });
+
+          const th = document.createElement("img");
+          th.src = img;
+
+          wrapper.appendChild(th);
+          att.appendChild(wrapper);
+
+          if (!gallery.includes(img)) gallery.push(img);
+        }
+        if (from === "assistant") {
+          assistantCount++;
+          if (assistantCount % 2 === 0) {
+            const r = 1 + Math.floor(Math.random() * 20);
+            const pill = document.createElement("span");
+            pill.className = "pill";
+            pill.innerHTML = `
             <span>🎲 D20 Rolled</span>
             <span class="ellipsis">…</span> 
-            <span class="number" style="color:${r<=7?'red':r<=13?'yellow':'limegreen'}">${r}</span>
+            <span class="number" style="color:${
+              r <= 7 ? "red" : r <= 13 ? "yellow" : "limegreen"
+            }">${r}</span>
           `;
-          att.appendChild(pill);
-        }
-      }
-      if(att.childElementCount) wrap.appendChild(att);
-      wrap.insertAdjacentHTML('beforeend',`<div class="bubble">${text}</div>`);
-      wrap.insertAdjacentHTML('beforeend',`<div class="message-actions">${
-        from==='assistant'
-           ?'<button class="edit-btn">Edit</button><button class="regenerate-btn">Regenerate</button>'
-           :'<button class="edit-btn">Edit</button>'}</div>`);
-
-      messages.prepend(wrap);
-
-
-      const items = wrap.querySelectorAll('.attachments > *');
-      items.forEach((el, i) => {
-        const baseDelay = i * 0.2;
-
-        el.style.opacity = '0';
-        el.style.setProperty('--base-delay', `${baseDelay}s`);
-
-        if (el.classList.contains('thumb')) {
-          el.style.animation = `slideIn .3s ease-out forwards var(--base-delay)`;
-          const SLIDE_MS = 50;
-          const imageEl = el.querySelector('img');
-          const reveal = () =>
-            setTimeout(() =>
-              requestAnimationFrame(() => el.classList.add('loaded'))
-            , SLIDE_MS);
-          if (imageEl.complete) { reveal(); } else { imageEl.addEventListener('load', reveal, { once: true }); }
-        } else {
-          el.style.animation = `slideIn .3s ease-out forwards var(--base-delay)`;
-        }
-        el.addEventListener('animationend', () => {
-          el.style.opacity = '1';
-          el.style.animation = '';
-        }, { once: true });
-      });
-
-      markLatestAssistant();
-
-      if(img && viewer) openViewer(img);
-
-      updateMessagePadding();
-      scrollLatest();
-
-      if (from === 'assistant') {
-        promptInput.disabled = true;
-        sendBtn.disabled = true;
-        wrap.addEventListener('animationend', () => {
-          promptInput.disabled = false;
-          sendBtn.disabled = false;
-          promptInput.focus();
-        }, { once: true });
-      }
-    }
-
-    function scrubInlineTransform(el) {
-      el.addEventListener('transitionend', e => {
-        if (e.propertyName === 'transform') {
-          el.style.removeProperty('transform');
-        }
-      });
-    }
-
-    /* open / update viewer */
-    // MODIFIED: Refactored to show viewer frame instantly before image loads.
-    function openViewer(src, fromThumb = null) {
-      // --- Phase 1: Create and show the viewer frame immediately ---
-      if (!viewer) {
-        viewer = qs('#viewer-template').cloneNode(true);
-        viewer.id = '';
-        viewer.style.display = '';
-        viewer.originThumb = fromThumb;
-        document.body.appendChild(viewer);
-        addViewerHandlers();
-
-        if (viewerState.width) { // Restore previous state if available
-          viewer.style.width  = viewerState.width;
-          viewer.style.height = viewerState.height;
-          viewer.style.top    = viewerState.top;
-          viewer.style.left   = viewerState.left;
-        } else { // Or position initially if no state exists
-          const chatRect = chat.getBoundingClientRect();
-          viewer.style.left = `${chatRect.left + css('--chat-pad-x')}px`;
-          viewer.style.top = `${chatRect.top + css('--chat-pad-x')}px`;
-        }
-
-        // Animate from thumbnail if one was clicked
-        if (fromThumb) {
-            if (body.classList.contains('game')) viewer.classList.add('full');
-            const final = viewer.getBoundingClientRect();
-            const thumb = fromThumb.getBoundingClientRect();
-            const scaleX = thumb.width  / final.width;
-            const scaleY = thumb.height / final.height;
-            const dx     = thumb.left - final.left;
-            const dy     = thumb.top  - final.top;
-            viewer.classList.add('no-transition');
-            viewer.style.transformOrigin = 'top left';
-            viewer.style.opacity   = '0';
-            viewer.style.transform = `translate(${dx}px,${dy}px) scale(${scaleX},${scaleY})`;
-            void viewer.offsetWidth;
-            viewer.classList.remove('no-transition');
-            requestAnimationFrame(() => {
-              viewer.style.opacity   = '1';
-              viewer.style.transform = 'none';
-            });
-            viewer.addEventListener('transitionend', () => {
-              viewer.style.removeProperty('transform');
-              updateMessagePadding();
-              scrollLatest();
-            }, { once: true });
-        } else { // Otherwise, just fade it in
-          viewer.style.opacity = '0';
-          requestAnimationFrame(() => (viewer.style.opacity = '1'));
-        }
-      }
-
-      viewer.classList.add('loading'); // Show shimmer effect
-
-      // --- Phase 2: Load the image and display it when ready ---
-      const preload = new Image();
-      preload.src = src;
-
-      preload.onload = () => {
-        viewer.classList.remove('loading'); // Hide shimmer
-
-        const imgEl = qs('img', viewer);
-        if (imgEl.src !== src) {
-          imgEl.style.opacity = 0;
-          // Bugfix: Correctly find the new thumbnail by checking the img src inside it
-          const newThumb = qsa('.thumb').find(t => t.querySelector('img')?.src === src);
-          if (newThumb) viewer.originThumb = newThumb;
-
-          imgEl.onload = () => {
-            const newIdx = gallery.indexOf(src);
-            const dir = lastViewerIndex === -1 ? 0
-                      : (newIdx - lastViewerIndex + gallery.length) % gallery.length === 1 ? 1
-                      : -1;
-            lastViewerIndex = newIdx;
-            const anim = dir === 1 ? 'slideRightIn'
-                      : dir === -1 ? 'slideLeftIn'
-                      : 'blurFade';
-            imgEl.style.animation = `${anim} .45s ease-out`;
-            imgEl.style.opacity   = 1;
-            imgEl.addEventListener('animationend',
-              () => imgEl.style.animation = '', { once: true });
-          };
-          imgEl.src = src;
-        } else {
-          // If for some reason the same image is loaded, ensure it's visible.
-          imgEl.style.opacity = 1;
-        }
-
-        const ind = qs('.indicator', viewer);
-        const idx = gallery.indexOf(src);
-        if (ind) ind.textContent = `${idx+1}/${gallery.length}`;
-
-        // Fit viewer in case of game mode.
-        if (viewer.style.opacity === '1') fitViewer();
-      };
-    }
-
-    function addViewerHandlers(){
-      const img=qs('img',viewer),
-            prev=qs('#prev-btn',viewer),
-            next=qs('#next-btn',viewer),
-            close=qs('#close-btn',viewer),
-            expand=qs('#expand-btn',viewer);
-
-      const idx=()=>gallery.indexOf(img.src);
-      prev.onclick=()=>openViewer(gallery[(idx()-1+gallery.length)%gallery.length]);
-      next.onclick=()=>openViewer(gallery[(idx()+1)%gallery.length]);
-      close.onclick=closeViewer;
-      expand.onclick=toggleGameMode;
-
-      viewer._keys=e=>{
-        if(e.key==='ArrowLeft') prev.onclick();
-        if(e.key==='ArrowRight') next.onclick();
-      };
-      window.addEventListener('keydown', viewer._keys);
-
-      let drag=false,sx=0,sy=0;
-      viewer.addEventListener('mousedown', e=>{
-        const overHandle = e.target.closest('.resize-handle');
-        if(viewer.classList.contains('full')||qs('footer',viewer).contains(e.target)||overHandle) return;
-        drag=true; sx=e.clientX-viewer.offsetLeft; sy=e.clientY-viewer.offsetTop;
-        viewer.classList.add('dragging');
-      });
-      window.addEventListener('mouseup', ()=>{
-        if(drag){
-          drag=false;
-
-          viewer.classList.remove('dragging');
-        }
-      });
-      window.addEventListener('mousemove', e=>{
-        if(!drag) return;
-        viewer.style.left=`${e.clientX-sx}px`;
-        viewer.style.top=`${e.clientY-sy}px`;
-      });
-
-      const handle=qs('.resize-handle',viewer);
-      let rz=false,sw=0,sh=0,stx=0,sty=0;
-      handle.addEventListener('mousedown',e=>{
-        if(viewer.classList.contains('full')) return;
-        e.stopPropagation();
-        rz=true; sw=viewer.offsetWidth; sh=viewer.offsetHeight;
-        stx=e.clientX; sty=e.clientY;
-      });
-      window.addEventListener('mousemove',e=>{
-        if(rz){
-          viewer.style.width = Math.max(320, sw + (e.clientX - stx))+'px';
-          viewer.style.height = Math.max(200, sh + (e.clientY - sty))+'px';
-          updateMessagePadding();
-        }
-      });
-      window.addEventListener('mouseup', ()=> rz=false);
-      handle.addEventListener('mouseenter', ()=>viewer.classList.add('no-hover-animation'));
-      handle.addEventListener('mouseleave', ()=>viewer.classList.remove('no-hover-animation'));
-    }
-
-    function closeViewer() {
-      if (!viewer) return;
-      const isGameMode = viewer.classList.contains('full');
-      if (!isGameMode) {
-        viewerState.width = viewer.style.width || `${viewer.getBoundingClientRect().width}px`;
-        viewerState.height = viewer.style.height || `${viewer.getBoundingClientRect().height}px`;
-        viewerState.top = viewer.style.top || `${viewer.getBoundingClientRect().top}px`;
-        viewerState.left = viewer.style.left || `${viewer.getBoundingClientRect().left}px`;
-      }
-      body.classList.remove('game');
-      window.removeEventListener('keydown', viewer._keys);
-      const fromThumb = viewer.originThumb;
-      if (fromThumb) {
-        const thumbRect = fromThumb.getBoundingClientRect();
-        const viewerRect = viewer.getBoundingClientRect();
-        const scaleX = thumbRect.width / viewerRect.width;
-        const scaleY = thumbRect.height / viewerRect.height;
-        const translateX = thumbRect.left - viewerRect.left;
-        const translateY = thumbRect.top - viewerRect.top;
-        viewer.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`;
-        viewer.style.opacity = '0';
-      } else {
-        viewer.style.opacity = '0';
-      }
-      viewer.addEventListener(
-        'transitionend',
-        () => {
-          if (viewer) viewer.remove();
-          viewer = null;
-          updateMessagePadding();
-          scrollLatest();
-        },
-        { once: true }
-      );
-    }
-
-    function toggleGameMode(){
-      if(!viewer) return;
-      const on = !body.classList.contains('game');
-      if(on){
-        const rect = viewer.getBoundingClientRect();
-        viewer.dataset.origWidth  = viewer.style.width  || `${rect.width}px`;
-        viewer.dataset.origHeight = viewer.style.height || `${rect.height}px`;
-        viewer.dataset.origTop    = viewer.style.top;
-        viewer.dataset.origLeft   = viewer.style.left;
-      } else {
-        if(viewer.dataset.origWidth)  viewer.style.width  = viewer.dataset.origWidth;
-        if(viewer.dataset.origHeight) viewer.style.height = viewer.dataset.origHeight;
-        if(viewer.dataset.origTop)    viewer.style.top    = viewer.dataset.origTop;
-        if(viewer.dataset.origLeft)   viewer.style.left   = viewer.dataset.origLeft;
-      }
-      body.classList.toggle('game', on);
-      viewer.classList.toggle('full', on);
-      fitViewer();
-      viewer.addEventListener('transitionend', () => {
-        updateMessagePadding();
-        scrollLatest();
-      }, {once: true});
-    }
-
-    /* misc handlers */
-    document.addEventListener('click',e=>{
-      if (e.target.matches('.edit-btn')) {
-        const btn = e.target;
-        const msgEl = btn.closest('.message');
-        const bubble = msgEl.querySelector('.bubble');
-        const finishEdit = () => {
-          bubble.contentEditable = false;
-          btn.textContent = 'Edit';
-          bubble.removeEventListener('keydown', onKeydown);
-          bubble.removeEventListener('focusout', onFocusOut);
-        };
-        const onKeydown = ev => {
-          if (ev.key === 'Enter' && !ev.shiftKey) {
-            ev.preventDefault();
-            finishEdit();
+            att.appendChild(pill);
           }
-        };
-        const onFocusOut = ev => {
-          if (ev.relatedTarget && ev.relatedTarget.matches('.edit-btn')) { return; }
-          finishEdit();
-        };
-        if (btn.textContent === 'Edit') {
-          bubble.contentEditable = true;
-          bubble.focus();
-          btn.textContent = 'Save';
-          bubble.addEventListener('keydown', onKeydown);
-          bubble.addEventListener('focusout', onFocusOut);
-        } else {
-          finishEdit();
+        }
+        if (att.childElementCount) wrap.appendChild(att);
+        wrap.insertAdjacentHTML(
+          "beforeend",
+          `<div class="bubble">${text}</div>`
+        );
+        wrap.insertAdjacentHTML(
+          "beforeend",
+          `<div class="message-actions">${
+            from === "assistant"
+              ? '<button class="edit-btn">Edit</button><button class="regenerate-btn">Regenerate</button>'
+              : '<button class="edit-btn">Edit</button>'
+          }</div>`
+        );
+
+        messages.prepend(wrap);
+
+        const items = wrap.querySelectorAll(".attachments > *");
+        items.forEach((el, i) => {
+          const baseDelay = i * 0.2;
+
+          el.style.opacity = "0";
+          el.style.setProperty("--base-delay", `${baseDelay}s`);
+
+          if (el.classList.contains("thumb")) {
+            el.style.animation = `slideIn .3s ease-out forwards var(--base-delay)`;
+            const SLIDE_MS = 50;
+            const imageEl = el.querySelector("img");
+            const reveal = () =>
+              setTimeout(
+                () => requestAnimationFrame(() => el.classList.add("loaded")),
+                SLIDE_MS
+              );
+            if (imageEl.complete) {
+              reveal();
+            } else {
+              imageEl.addEventListener("load", reveal, { once: true });
+            }
+          } else {
+            el.style.animation = `slideIn .3s ease-out forwards var(--base-delay)`;
+          }
+          el.addEventListener(
+            "animationend",
+            () => {
+              el.style.opacity = "1";
+              el.style.animation = "";
+            },
+            { once: true }
+          );
+        });
+
+        markLatestAssistant();
+
+        if (img && viewer) openViewer(img, { animationHint: "new" });
+
+        scrollLatest();
+
+        if (from === "assistant") {
+          promptInput.disabled = true;
+          sendBtn.disabled = true;
+          wrap.addEventListener(
+            "animationend",
+            () => {
+              promptInput.disabled = false;
+              sendBtn.disabled = false;
+              promptInput.focus();
+            },
+            { once: true }
+          );
         }
       }
-      if(e.target.matches('.regenerate-btn')) console.log('Regenerate', e.target.closest('.message'));
-    });
 
-    // MODIFIED: Removed Shift+Enter handler to prevent race conditions.
-    // The 'input' event listener is sufficient and more reliable.
-    promptInput.addEventListener('keydown',e=>{
-      if(e.key==='Enter' && !e.shiftKey){
-        e.preventDefault();
-        sendBtn.click();
-      }
-    });
-
-    qs('#prompt-form').onsubmit=e=>{
-      e.preventDefault();
-      const txt = promptInput.value.trim();
-      if(!txt) return;
-      promptInput.disabled = true;
-      sendBtn.disabled   = true;
-      addMessage(txt,{from:'user'});
-      promptInput.value='';
-      // Manually trigger resize after clearing input
-      setTimeout(resizePrompt, 0);
-      setTimeout(()=>addMessage('Lorem ipsum dolor sit amet…'),700);
-    };
-
-    qs('#collapse-sidebar-btn').onclick=()=>body.classList.add('sidebar-collapsed');
-    qs('#toggle-sidebar-btn').onclick  =()=>body.classList.remove('sidebar-collapsed');
-    qs('#new-chat-btn').onclick =
-    qs('#new-chat-icon-btn').onclick = ()=>{
-      qs('#chat-list').insertAdjacentHTML('afterbegin',
-        `<li>Adventure ${qs('#chat-list').childElementCount+1}</li>`
-      );
-      messages.innerHTML=''; gallery=[]; assistantCount=0; closeViewer();
-    };
-
-
-
-    window.addEventListener('keydown',e=>{
-      if(e.key==='Tab'){ e.preventDefault(); body.classList.toggle('sidebar-collapsed'); }
-    });
-    window.addEventListener('resize',()=>{ fitViewer(); updateMessagePadding(); });
-
-    /* seed */
-    addMessage('Welcome to ROAM!  Try toggling game-mode (click an image & “⤢”).');
-
-    // MODIFIED: Extracted resizePrompt to be a global, more robust function.
-    function resizePrompt() {
-        promptInput.style.height = 'auto'; // Reset height
-        
-        // MODIFIED: Conditionally show scrollbar only when content exceeds max-height
-        const maxHeight = parseFloat(getComputedStyle(promptInput).maxHeight);
-        if (promptInput.scrollHeight > maxHeight) {
-            promptInput.style.overflowY = 'auto';
-        } else {
-            promptInput.style.overflowY = 'hidden';
-        }
-
-        promptInput.style.height = `${promptInput.scrollHeight}px`; // Set to content height
-        
-        // In game mode, we need to recalculate layout after the prompt resizes.
-        // requestAnimationFrame ensures this happens after the browser has painted the change.
-        requestAnimationFrame(() => {
-          if (body.classList.contains('game')) {
-              fitViewer();
-              updateMessagePadding();
+      function scrubInlineTransform(el) {
+        el.addEventListener("transitionend", (e) => {
+          if (e.propertyName === "transform") {
+            el.style.removeProperty("transform");
           }
         });
-    }
-
-    function setupPromptAutoResize() {
-      const style = getComputedStyle(promptInput);
-      let lineHeight = parseFloat(style.lineHeight);
-      if (isNaN(lineHeight)) {
-          lineHeight = parseFloat(style.fontSize) * 1.2;
       }
-      const paddingTop = parseFloat(style.paddingTop);
-      const paddingBottom = parseFloat(style.paddingBottom);
-      const maxHeight = (4 * lineHeight) + paddingTop + paddingBottom;
-      promptInput.style.maxHeight = `${maxHeight}px`;
 
-      promptInput.addEventListener('input', resizePrompt);
-      resizePrompt(); // Set initial size
-    }
-    setupPromptAutoResize();
-  </script>
-</body>
+      function openViewer(src, options = {}) {
+        const { fromThumb, animationHint } = options;
+
+        if (!viewer) {
+          viewer = qs("#viewer-template").cloneNode(true);
+          viewer.id = "";
+          viewer.style.display = "";
+          viewer.originThumb = fromThumb;
+          document.body.appendChild(viewer);
+          addViewerHandlers();
+
+          if (viewerState.width) {
+            viewer.style.width = viewerState.width;
+            viewer.style.height = viewerState.height;
+            viewer.style.top = viewerState.top;
+            viewer.style.left = viewerState.left;
+          } else {
+            const chatRect = chat.getBoundingClientRect();
+            viewer.style.left = `${chatRect.left + css("--chat-pad-x")}px`;
+            viewer.style.top = `${chatRect.top + css("--chat-pad-x")}px`;
+          }
+
+          if (fromThumb) {
+            if (body.classList.contains("game")) viewer.classList.add("full");
+            const final = viewer.getBoundingClientRect();
+            const thumb = fromThumb.getBoundingClientRect();
+            const scaleX = thumb.width / final.width;
+            const scaleY = thumb.height / final.height;
+            const dx = thumb.left - final.left;
+            const dy = thumb.top - final.top;
+            viewer.classList.add("no-transition");
+            viewer.style.transformOrigin = "top left";
+            viewer.style.opacity = "0";
+            viewer.style.transform = `translate(${dx}px,${dy}px) scale(${scaleX},${scaleY})`;
+            void viewer.offsetWidth;
+            viewer.classList.remove("no-transition");
+            requestAnimationFrame(() => {
+              viewer.style.opacity = "1";
+              viewer.style.transform = "none";
+            });
+            viewer.addEventListener(
+              "transitionend",
+              () => {
+                viewer.style.removeProperty("transform");
+                updateLayout();
+              },
+              { once: true }
+            );
+          } else {
+            viewer.style.opacity = "0";
+            requestAnimationFrame(() => (viewer.style.opacity = "1"));
+          }
+        }
+
+        viewer.classList.add("loading");
+
+        const preload = new Image();
+        preload.src = src;
+
+        preload.onload = () => {
+          viewer.classList.remove("loading");
+
+          const imgEl = qs("img", viewer);
+          if (imgEl.src !== src) {
+            imgEl.style.opacity = 0;
+            const newThumb = qsa(".thumb").find(
+              (t) => t.querySelector("img")?.src === src
+            );
+            if (newThumb) viewer.originThumb = newThumb;
+
+            imgEl.onload = () => {
+              const anim =
+                animationHint === "next" || animationHint === "new"
+                  ? "slideLeftIn"
+                  : animationHint === "prev"
+                  ? "slideRightIn"
+                  : "blurFade";
+
+              imgEl.style.animation = `${anim} .45s ease-out`;
+              imgEl.style.opacity = 1;
+              imgEl.addEventListener(
+                "animationend",
+                () => (imgEl.style.animation = ""),
+                { once: true }
+              );
+            };
+            imgEl.src = src;
+          } else {
+            imgEl.style.opacity = 1;
+          }
+
+          const ind = qs(".indicator", viewer);
+          const idx = gallery.indexOf(src);
+          if (ind) ind.textContent = `${idx + 1}/${gallery.length}`;
+
+          if (viewer.style.opacity === "1") fitViewer();
+        };
+      }
+
+      function addViewerHandlers() {
+        const img = qs("img", viewer),
+          prev = qs("#prev-btn", viewer),
+          next = qs("#next-btn", viewer),
+          close = qs("#close-btn", viewer),
+          expand = qs("#expand-btn", viewer);
+
+        const idx = () => gallery.indexOf(img.src);
+        prev.onclick = () =>
+          openViewer(gallery[(idx() - 1 + gallery.length) % gallery.length], {
+            animationHint: "prev",
+          });
+        next.onclick = () =>
+          openViewer(gallery[(idx() + 1) % gallery.length], {
+            animationHint: "next",
+          });
+        close.onclick = closeViewer;
+        expand.onclick = toggleGameMode;
+
+        viewer._keys = (e) => {
+          if (e.key === "ArrowLeft") prev.onclick();
+          if (e.key === "ArrowRight") next.onclick();
+        };
+        window.addEventListener("keydown", viewer._keys);
+
+        let drag = false,
+          sx = 0,
+          sy = 0;
+        viewer.addEventListener("mousedown", (e) => {
+          const overHandle = e.target.closest(".resize-handle");
+          if (
+            viewer.classList.contains("full") ||
+            qs("footer", viewer).contains(e.target) ||
+            overHandle
+          )
+            return;
+          drag = true;
+          sx = e.clientX - viewer.offsetLeft;
+          sy = e.clientY - viewer.offsetTop;
+          viewer.classList.add("dragging");
+        });
+        window.addEventListener("mouseup", () => {
+          if (drag) {
+            drag = false;
+
+            viewer.classList.remove("dragging");
+          }
+        });
+        window.addEventListener("mousemove", (e) => {
+          if (!drag) return;
+          viewer.style.left = `${e.clientX - sx}px`;
+          viewer.style.top = `${e.clientY - sy}px`;
+        });
+
+        const handle = qs(".resize-handle", viewer);
+        let rz = false,
+          sw = 0,
+          sh = 0,
+          stx = 0,
+          sty = 0;
+        handle.addEventListener("mousedown", (e) => {
+          if (viewer.classList.contains("full")) return;
+          e.stopPropagation();
+          rz = true;
+          sw = viewer.offsetWidth;
+          sh = viewer.offsetHeight;
+          stx = e.clientX;
+          sty = e.clientY;
+        });
+        window.addEventListener("mousemove", (e) => {
+          if (rz) {
+            viewer.style.width = Math.max(320, sw + (e.clientX - stx)) + "px";
+            viewer.style.height = Math.max(200, sh + (e.clientY - sty)) + "px";
+            updateLayout();
+          }
+        });
+        window.addEventListener("mouseup", () => (rz = false));
+        handle.addEventListener("mouseenter", () =>
+          viewer.classList.add("no-hover-animation")
+        );
+        handle.addEventListener("mouseleave", () =>
+          viewer.classList.remove("no-hover-animation")
+        );
+      }
+
+      function closeViewer() {
+        if (!viewer) return;
+        const isGameMode = viewer.classList.contains("full");
+        if (!isGameMode) {
+          viewerState.width =
+            viewer.style.width || `${viewer.getBoundingClientRect().width}px`;
+          viewerState.height =
+            viewer.style.height || `${viewer.getBoundingClientRect().height}px`;
+          viewerState.top =
+            viewer.style.top || `${viewer.getBoundingClientRect().top}px`;
+          viewerState.left =
+            viewer.style.left || `${viewer.getBoundingClientRect().left}px`;
+        }
+        body.classList.remove("game");
+        window.removeEventListener("keydown", viewer._keys);
+        const fromThumb = viewer.originThumb;
+        if (fromThumb) {
+          const thumbRect = fromThumb.getBoundingClientRect();
+          const viewerRect = viewer.getBoundingClientRect();
+          const scaleX = thumbRect.width / viewerRect.width;
+          const scaleY = thumbRect.height / viewerRect.height;
+          const translateX = thumbRect.left - viewerRect.left;
+          const translateY = thumbRect.top - viewerRect.top;
+          viewer.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`;
+          viewer.style.opacity = "0";
+        } else {
+          viewer.style.opacity = "0";
+        }
+        viewer.addEventListener(
+          "transitionend",
+          () => {
+            if (viewer) viewer.remove();
+            viewer = null;
+            updateLayout();
+          },
+          { once: true }
+        );
+      }
+
+      function toggleGameMode() {
+        if (!viewer) return;
+        const on = !body.classList.contains("game");
+        if (on) {
+          const rect = viewer.getBoundingClientRect();
+          viewer.dataset.origWidth = viewer.style.width || `${rect.width}px`;
+          viewer.dataset.origHeight = viewer.style.height || `${rect.height}px`;
+          viewer.dataset.origTop = viewer.style.top;
+          viewer.dataset.origLeft = viewer.style.left;
+        } else {
+          if (viewer.dataset.origWidth)
+            viewer.style.width = viewer.dataset.origWidth;
+          if (viewer.dataset.origHeight)
+            viewer.style.height = viewer.dataset.origHeight;
+          if (viewer.dataset.origTop) viewer.style.top = viewer.dataset.origTop;
+          if (viewer.dataset.origLeft)
+            viewer.style.left = viewer.dataset.origLeft;
+        }
+        body.classList.toggle("game", on);
+        viewer.classList.toggle("full", on);
+        fitViewer();
+
+        setTimeout(() => {
+          updateLayout({ smooth: false });
+        }, 450);
+      }
+
+      document.addEventListener("click", (e) => {
+        if (e.target.matches(".edit-btn")) {
+          const btn = e.target;
+          const msgEl = btn.closest(".message");
+          const bubble = msgEl.querySelector(".bubble");
+          const finishEdit = () => {
+            bubble.contentEditable = false;
+            btn.textContent = "Edit";
+            bubble.removeEventListener("keydown", onKeydown);
+            bubble.removeEventListener("focusout", onFocusOut);
+          };
+          const onKeydown = (ev) => {
+            if (ev.key === "Enter" && !ev.shiftKey) {
+              ev.preventDefault();
+              finishEdit();
+            }
+          };
+          const onFocusOut = (ev) => {
+            if (ev.relatedTarget && ev.relatedTarget.matches(".edit-btn")) {
+              return;
+            }
+            finishEdit();
+          };
+          if (btn.textContent === "Edit") {
+            bubble.contentEditable = true;
+            bubble.focus();
+            btn.textContent = "Save";
+            bubble.addEventListener("keydown", onKeydown);
+            bubble.addEventListener("focusout", onFocusOut);
+          } else {
+            finishEdit();
+          }
+        }
+        if (e.target.matches(".regenerate-btn"))
+          console.log("Regenerate", e.target.closest(".message"));
+      });
+
+      promptInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendBtn.click();
+        }
+      });
+
+      qs("#prompt-form").onsubmit = (e) => {
+        e.preventDefault();
+        const txt = promptInput.value.trim();
+        if (!txt) return;
+        promptInput.disabled = true;
+        sendBtn.disabled = true;
+        addMessage(txt, { from: "user" });
+        promptInput.value = "";
+        setTimeout(resizePrompt, 0);
+        setTimeout(() => addMessage(generateRandomMultilineText()), 700);
+      };
+
+      qs("#collapse-sidebar-btn").onclick = () =>
+        body.classList.add("sidebar-collapsed");
+      qs("#toggle-sidebar-btn").onclick = () =>
+        body.classList.remove("sidebar-collapsed");
+      qs("#new-chat-btn").onclick = qs("#new-chat-icon-btn").onclick = () => {
+        qs("#chat-list").insertAdjacentHTML(
+          "afterbegin",
+          `<li>Adventure ${qs("#chat-list").childElementCount + 1}</li>`
+        );
+        messages.innerHTML = "";
+        gallery = [];
+        assistantCount = 0;
+        closeViewer();
+      };
+
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Tab") {
+          e.preventDefault();
+          body.classList.toggle("sidebar-collapsed");
+        }
+      });
+      window.addEventListener("resize", () => {
+        fitViewer();
+        updateLayout();
+      });
+      qs("#sidebar").addEventListener("transitionend", (e) => {
+        if (e.propertyName === "transform") {
+          fitViewer();
+          updateLayout();
+        }
+      });
+
+      function generateRandomMultilineText() {
+        const line =
+          "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam pellentesque aliquet tellus. Phasellus pharetra nulla ac diam. Quisque semper justo at risus. ";
+        const lineCount = 1 + Math.floor(Math.random() * 20);
+        let text = [];
+        for (let i = 0; i < lineCount; i++) {
+          const randomEnd = 20 + Math.floor(Math.random() * (line.length - 25));
+          text.push(line.substring(0, randomEnd));
+        }
+        return text.join("<br>");
+      }
+
+      addMessage(generateRandomMultilineText());
+      body.classList.add("sidebar-collapsed");
+
+      function resizePrompt() {
+        promptInput.style.height = "auto";
+
+        const maxHeight = parseFloat(getComputedStyle(promptInput).maxHeight);
+        if (promptInput.scrollHeight > maxHeight) {
+          promptInput.style.overflowY = "auto";
+        } else {
+          promptInput.style.overflowY = "hidden";
+        }
+
+        promptInput.style.height = `${promptInput.scrollHeight}px`;
+
+        requestAnimationFrame(() => {
+          fitViewer();
+          updateLayout({ smooth: true });
+        });
+      }
+
+      function setupPromptAutoResize() {
+        const style = getComputedStyle(promptInput);
+        let lineHeight = parseFloat(style.lineHeight);
+        if (isNaN(lineHeight)) {
+          lineHeight = parseFloat(style.fontSize) * 1.2;
+        }
+        const paddingTop = parseFloat(style.paddingTop);
+        const paddingBottom = parseFloat(style.paddingBottom);
+        const maxHeight = 4 * lineHeight + paddingTop + paddingBottom;
+        promptInput.style.maxHeight = `${maxHeight}px`;
+
+        promptInput.addEventListener("input", resizePrompt);
+        resizePrompt();
+      }
+      setupPromptAutoResize();
+    </script>
+  </body>
 </html>
