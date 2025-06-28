@@ -24,16 +24,25 @@ class GoogleBrain(Brain[Message, Tool]):
         self.client = genai.Client(api_key=api_key)
 
     def _to_contents(self, messages: Sequence[Message]):
-        """Convert messages to Google genai Content objects, skipping system messages."""
+        """Convert messages to Google genai Content objects."""
 
-        return [
-            types.Content(
-                role=m.get("role", "user"),
-                parts=[types.Part.from_text(text=m.get("content", ""))],
+        contents: list[types.Content] = []
+        for m in messages:
+            role = m.get("role", "user")
+            if role == "system":
+                continue
+            if role in {"assistant", "model"}:
+                role = "model"
+            elif role == "tool":
+                role = "user"
+            contents.append(
+                types.Content(
+                    role=role,
+                    parts=[types.Part.from_text(text=m.get("content", ""))],
+                )
             )
-            for m in messages
-            if m.get("role") != "system"
-        ]
+
+        return contents
 
     def _to_tool(self, tool: Tool) -> types.Tool:
         """Convert a tool definition to the genai Tool format."""

@@ -196,7 +196,7 @@ Remember to prompt each section as if it doesn't know what happened in the story
                                 },
                             },
                         },
-                        "required": ["prompt", "danbooru", "genders", "sections"],
+                        "required": ["prompt", "danbooru", "genders", "style"],
                     },
                 },
                 "type": "function",
