@@ -907,18 +907,27 @@ Remember to prompt each section as if it doesn't know what happened in the story
             instruction = (
                 "Use the generate_scene_image tool to draw the last scene."
             )
-            forced_content = ""
-            msg_count = 2
-            for chunk, content, tool_call in self.stream(instruction, None):
-                if tool_call is not None:
+
+            messages_added = 1  # user instruction
+            saw_content = False
+            tool_added = False
+            for _chunk, content, tool_call in self.stream(instruction, None):
+                if live is not None:
+                    live.update(Markdown(last_content))
+                if tool_call is not None and not tool_added:
                     last_tool = tool_call
-                if content:
-                    forced_content = content
-                    msg_count += 1
-                yield chunk, content, tool_call
-            self.brain.clear_last_messages(msg_count + 1, keep=msg_count)
-            if live is not None:
-                live.update(Markdown(last_content))
+                    tool_added = True
+                    messages_added += 2  # tool_call + tool_use
+                if content and not saw_content:
+                    saw_content = True
+                    messages_added += 1  # assistant text
+            # remove the helper prompt and any assistant text, keep the tool call
+            self.brain.clear_last_messages(messages_added, keep=2)
+            if last_tool is not None:
+                yield "", last_content, last_tool
+            else:
+                if live is not None:
+                    live.update(Markdown(last_content))
         self.save_messages()
 
     def uncensor(
