@@ -1002,27 +1002,23 @@
       let prevScrollTop = messages.scrollTop;
 
       messages.addEventListener("scroll", () => {
-        let shouldBeStuck = false;
-        // --- START: MODIFIED SCRIPT ---
-        if (body.classList.contains("game")) {
-          // In game mode, "stuck" means the latest message is pinned below the viewer.
-          // This behavior is now controlled by a setting.
-          shouldBeStuck =
-            settings.gameModePinning && isLatestMessageInPosition();
+        if (body.classList.contains("game") && !settings.gameModePinning) {
+          if (messages.scrollTop < prevScrollTop) {
+            autoStick = false;
+          }
         } else {
-          // --- END: MODIFIED SCRIPT ---
-          // In normal mode, "stuck" means we are at the bottom of the chat.
-          shouldBeStuck = atBottom();
-        }
+          let shouldBeStuck = false;
+          if (body.classList.contains("game")) {
+            shouldBeStuck = settings.gameModePinning && isLatestMessageInPosition();
+          } else {
+            shouldBeStuck = atBottom();
+          }
 
-        // Re-engage auto-stick if the user scrolls to the "stuck" position.
-        if (shouldBeStuck) {
-          autoStick = true;
-        }
-        // Any manual upward scroll breaks the stickiness. This should only happen
-        // if we are NOT in the "stuck" position, to avoid flip-flopping.
-        else if (messages.scrollTop < prevScrollTop) {
-          autoStick = false;
+          if (shouldBeStuck) {
+            autoStick = true;
+          } else if (messages.scrollTop < prevScrollTop) {
+            autoStick = false;
+          }
         }
         prevScrollTop = messages.scrollTop;
       });
@@ -1169,33 +1165,29 @@
                   span.style.display = "inline-block";
                   span.style.animation = "wordFadeIn 0.4s ease-out forwards";
                   targetElement.appendChild(span);
-                  // --- START: MODIFIED SCRIPT ---
-                  if (
-                    autoStick &&
-                    body.classList.contains("game") &&
-                    settings.gameModePinning
-                  ) {
-                    // --- END: MODIFIED SCRIPT ---
-                    // In game mode, we need to manually scroll to keep the newest text visible,
-                    // as the bubble can grow past the bottom of the viewport.
-                    const bubbleEl = element; // This is the .bubble div
-                    const promptRect = promptBar.getBoundingClientRect();
-                    const bubbleRect = bubbleEl.getBoundingClientRect();
+                  if (autoStick && body.classList.contains("game")) {
+                    if (settings.gameModePinning) {
+                      // In game mode, we need to manually scroll to keep the newest text visible,
+                      // as the bubble can grow past the bottom of the viewport.
+                      const bubbleEl = element; // This is the .bubble div
+                      const promptRect = promptBar.getBoundingClientRect();
+                      const bubbleRect = bubbleEl.getBoundingClientRect();
 
-                    // Define the bottom of the visible chat area (prompt bar top, with a small buffer)
-                    const visibleBottom = promptRect.top - 20;
+                      const visibleBottom = promptRect.top - 20;
 
-                    // If the bottom of the bubble has gone past the visible area...
-                    if (bubbleRect.bottom > visibleBottom) {
-                      // ...scroll the container up by the difference.
-                      const scrollAmount = bubbleRect.bottom - visibleBottom;
-                      messages.scrollBy({
-                        top: scrollAmount,
-                        behavior: "auto",
-                      });
+                      if (bubbleRect.bottom > visibleBottom) {
+                        const scrollAmount = bubbleRect.bottom - visibleBottom;
+                        messages.scrollBy({
+                          top: scrollAmount,
+                          behavior: "auto",
+                        });
+                      }
                     }
+
+                    const msgEl = element.closest(".message");
+                    if (msgEl)
+                      scrollMessageIntoPosition(msgEl, { behavior: "auto" });
                   } else if (autoStick) {
-                    // In normal mode, the old behavior is correct.
                     scrollToBottom("auto");
                   }
                   await new Promise((r) => setTimeout(r, speed));
@@ -1208,13 +1200,7 @@
               }
               targetElement.appendChild(newElement);
 
-              // --- START: MODIFIED SCRIPT ---
-              if (
-                autoStick &&
-                body.classList.contains("game") &&
-                settings.gameModePinning
-              ) {
-                // --- END: MODIFIED SCRIPT ---
+              if (autoStick && body.classList.contains("game")) {
                 const msgEl = element.closest(".message");
                 if (msgEl)
                   scrollMessageIntoPosition(msgEl, { behavior: "auto" });
@@ -1329,13 +1315,7 @@
 
         markLatestAssistant();
 
-        // --- START: MODIFIED SCRIPT ---
-        if (
-          wasStuck &&
-          body.classList.contains("game") &&
-          settings.gameModePinning
-        ) {
-          // --- END: MODIFIED SCRIPT ---
+        if (wasStuck && body.classList.contains("game")) {
           requestAnimationFrame(() =>
             scrollMessageIntoPosition(wrap, { behavior: "smooth" })
           );
@@ -1454,11 +1434,7 @@
           const idx = gallery.indexOf(src);
           if (ind) ind.textContent = `${idx + 1}/${gallery.length}`;
 
-          if (
-            body.classList.contains("game") &&
-            viewer.originThumb &&
-            settings.gameModePinning
-          ) {
+          if (body.classList.contains("game") && viewer.originThumb) {
             const messageToScroll = viewer.originThumb.closest(".message");
             if (messageToScroll) {
               requestAnimationFrame(() =>
@@ -1549,7 +1525,7 @@
 
         const smoothResizeLoop = () => {
           if (!verticalResize.active) return;
-          if (viewer.originThumb && settings.gameModePinning) {
+          if (viewer.originThumb) {
             const messageToPin = viewer.originThumb.closest(".message");
             if (messageToPin) {
               scrollMessageIntoPosition(messageToPin, { behavior: "auto" });
@@ -1732,7 +1708,7 @@
           viewer.dataset.defaultHeight = viewer.style.height;
         }
 
-        if (on && settings.gameModePinning) {
+        if (on) {
           setTimeout(() => {
             requestAnimationFrame(() => {
               if (viewer && viewer.originThumb) {
@@ -1821,11 +1797,7 @@
         const userMessageEl = await addMessage(userText, { from: "user" });
 
         if (wasStuck) {
-          if (
-            body.classList.contains("game") &&
-            viewer &&
-            settings.gameModePinning
-          ) {
+          if (body.classList.contains("game") && viewer) {
             requestAnimationFrame(() => {
               scrollMessageIntoPosition(userMessageEl, { behavior: "smooth" });
             });
@@ -1897,7 +1869,7 @@
       window.addEventListener("resize", () => {
         fitViewer();
         requestAnimationFrame(() => {
-          if (viewer && viewer.originThumb && settings.gameModePinning) {
+          if (viewer && viewer.originThumb) {
             const messageToScroll = viewer.originThumb.closest(".message");
             if (messageToScroll)
               scrollMessageIntoPosition(messageToScroll, { behavior: "auto" });
@@ -1908,15 +1880,15 @@
       qs("#sidebar").addEventListener("transitionend", (e) => {
         if (e.propertyName === "transform") {
           fitViewer();
-          requestAnimationFrame(() => {
-            if (viewer && viewer.originThumb && settings.gameModePinning) {
-              const messageToScroll = viewer.originThumb.closest(".message");
-              if (messageToScroll)
-                scrollMessageIntoPosition(messageToScroll, {
-                  behavior: "auto",
-                });
-            }
-          });
+        requestAnimationFrame(() => {
+          if (viewer && viewer.originThumb) {
+            const messageToScroll = viewer.originThumb.closest(".message");
+            if (messageToScroll)
+              scrollMessageIntoPosition(messageToScroll, {
+                behavior: "auto",
+              });
+          }
+        });
         }
       });
 
@@ -1965,7 +1937,7 @@ What do you do?`
         viewer.style.height = `${newHeight}px`;
 
         requestAnimationFrame(() => {
-          if (viewer.originThumb && settings.gameModePinning) {
+          if (viewer.originThumb) {
             const messageToPin = viewer.originThumb.closest(".message");
             if (messageToPin)
               scrollMessageIntoPosition(messageToPin, { behavior: "auto" });
