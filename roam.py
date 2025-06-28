@@ -11,6 +11,7 @@ from ui import STREAM_RESPONSE, TOOL_CALL, UI
 from rich import print
 from rich.console import Group, RenderableType
 from rich.rule import Rule
+from rich.live import Live
 from groq.types.chat import (
     ChatCompletionSystemMessageParam,
     ChatCompletionAssistantMessageParam,
@@ -723,7 +724,7 @@ Remember to prompt each section as if it doesn't know what happened in the story
                 sections=sections,
             )
             time.sleep(2)
-
+            self.live.update(content)
             self.live.console.print(
                 Group(prompt_mk, Rule(style="yellow"))
                 if content.markup.strip()
