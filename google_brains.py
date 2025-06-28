@@ -11,7 +11,7 @@ from typing import (
     overload,
 )
 from types import SimpleNamespace
-from google import genai
+import google.generativeai as genai
 from rich import print
 from brains import Brain
 from vstore import VStore
@@ -102,7 +102,7 @@ def _convert_response(resp) -> Mapping[str, Any]:
 
 @dataclass
 class GoogleBrain(Brain[Message, Mapping[str, Any]]):
-    model: str = "gemini-2.0-flash-001"
+    model: str = "gemini-2.0-flash"
     client: genai.GenerativeModel = field(init=False)
     messages: list[Message] = field(default_factory=list)
     default_tools: Optional[list[Mapping[str, Any]]] = None
