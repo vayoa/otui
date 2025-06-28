@@ -1,7 +1,6 @@
 /.vscode
-v2/.vscode
 /__pycache__
 /.idea
 /models
-/v2/__pycache__
-/v2/chats
+/chats
+/secrets

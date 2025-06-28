@@ -115,6 +115,12 @@
         display: none;
       }
 
+      #sidebar nav {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
       #sidebar nav ul {
         list-style: none;
         margin: 0;
@@ -136,6 +142,134 @@
         background: rgba(255, 255, 255, 0.2);
         transform: translateX(5px);
       }
+
+      /* --- START: MODIFIED CSS --- */
+      #sidebar-footer {
+        padding-top: 1rem;
+        border-top: 1px solid var(--stroke);
+      }
+      #settings-btn {
+        all: unset;
+        box-sizing: border-box;
+        width: 100%;
+        text-align: left;
+        padding: 0.5rem 0.75rem;
+        font-family: "Instrument Sans", sans-serif;
+        cursor: pointer;
+        border-radius: 6px;
+        transition: background 0.2s ease;
+      }
+      #settings-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+      .settings-modal {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: var(--blur);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        padding: 1rem;
+      }
+      .settings-modal-content {
+        background: #181c2b;
+        border: 1px solid var(--stroke);
+        border-radius: 8px;
+        width: 100%;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.37);
+      }
+      .settings-modal-content .settings-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0.5rem 0.5rem 1rem;
+        border-bottom: 1px solid var(--stroke);
+        font-family: "Instrument Sans", sans-serif;
+      }
+      .settings-modal-content .settings-header h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 500;
+      }
+      .settings-modal-content #close-settings-btn {
+        font-size: 1rem;
+        background: none;
+        border: none;
+      }
+      .settings-body {
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .setting-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .setting-item label:first-child {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        font-family: "Instrument Sans", sans-serif;
+        font-size: 14px;
+        line-height: 1.3;
+      }
+      .setting-item small {
+        opacity: 0.6;
+        font-size: 12px;
+      }
+      .switch {
+        position: relative;
+        display: inline-block;
+        width: 44px;
+        height: 24px;
+        flex-shrink: 0;
+      }
+      .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #333;
+        transition: 0.4s;
+      }
+      .slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: 0.4s;
+      }
+      input:checked + .slider {
+        background: linear-gradient(135deg, #d67aff 0%, #7967ff 100%);
+      }
+      input:focus + .slider {
+        box-shadow: 0 0 1px #7967ff;
+      }
+      input:checked + .slider:before {
+        transform: translateX(20px);
+      }
+      .slider.round {
+        border-radius: 24px;
+      }
+      .slider.round:before {
+        border-radius: 50%;
+      }
+      /* --- END: MODIFIED CSS --- */
 
       #main-content {
         height: 100vh;
@@ -507,14 +641,12 @@
         cursor: pointer;
         font-size: 1rem;
       }
-      /* --- START: MODIFIED CSS --- */
       .viewer footer button#jump-btn {
-        font-size: 1.2rem; /* Make icon larger to match others */
+        font-size: 1.2rem;
       }
       body.game .viewer footer #jump-btn {
-        display: none; /* Hide button in game mode */
+        display: none;
       }
-      /* --- END: MODIFIED CSS --- */
       .viewer footer .indicator {
         color: var(--txt);
         margin: 0 4px;
@@ -748,8 +880,40 @@
           ROAM <button id="collapse-sidebar-btn" class="icon-btn">☰</button>
         </header>
         <button id="new-chat-btn">+ Start a new adventure</button>
-        <nav><ul id="chat-list"></ul></nav>
+        <nav>
+          <ul id="chat-list"></ul>
+          <!-- --- START: MODIFIED HTML --- -->
+          <footer id="sidebar-footer">
+            <button id="settings-btn">⚙️ Settings</button>
+          </footer>
+          <!-- --- END: MODIFIED HTML --- -->
+        </nav>
       </div>
+      <!-- --- START: MODIFIED HTML --- -->
+      <div id="settings-modal" class="settings-modal" style="display: none">
+        <div class="settings-modal-content">
+          <header class="settings-header">
+            <h3>Settings</h3>
+            <button id="close-settings-btn" class="icon-btn">✕</button>
+          </header>
+          <div class="settings-body">
+            <div class="setting-item">
+              <label for="game-mode-pinning-toggle">
+                <span>Pin latest message in Game Mode</span>
+                <small
+                  >Automatically scroll to keep the newest message visible below
+                  the image.</small
+                >
+              </label>
+              <label class="switch">
+                <input type="checkbox" id="game-mode-pinning-toggle" />
+                <span class="slider round"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- --- END: MODIFIED HTML --- -->
     </aside>
 
     <div id="main-content">
@@ -811,6 +975,12 @@
           getComputedStyle(document.documentElement).getPropertyValue(n)
         );
 
+      // --- START: MODIFIED SCRIPT ---
+      let settings = {
+        gameModePinning: false, // Default to OFF, as requested.
+      };
+      // --- END: MODIFIED SCRIPT ---
+
       let viewerState = {};
 
       const SPACER = css("--viewer-spacer");
@@ -831,16 +1001,62 @@
       let autoStick = true; // are we currently magnetised?
       let prevScrollTop = messages.scrollTop;
 
-      // --- START: MODIFIED SCRIPT ---
-      // This is the simplified scroll listener. It ONLY turns off autoStick.
       messages.addEventListener("scroll", () => {
-        // Any manual upward scroll breaks the stickiness.
-        if (messages.scrollTop < prevScrollTop) {
+        let shouldBeStuck = false;
+        // --- START: MODIFIED SCRIPT ---
+        if (body.classList.contains("game")) {
+          // In game mode, "stuck" means the latest message is pinned below the viewer.
+          // This behavior is now controlled by a setting.
+          shouldBeStuck =
+            settings.gameModePinning && isLatestMessageInPosition();
+        } else {
+          // --- END: MODIFIED SCRIPT ---
+          // In normal mode, "stuck" means we are at the bottom of the chat.
+          shouldBeStuck = atBottom();
+        }
+
+        // Re-engage auto-stick if the user scrolls to the "stuck" position.
+        if (shouldBeStuck) {
+          autoStick = true;
+        }
+        // Any manual upward scroll breaks the stickiness. This should only happen
+        // if we are NOT in the "stuck" position, to avoid flip-flopping.
+        else if (messages.scrollTop < prevScrollTop) {
           autoStick = false;
         }
         prevScrollTop = messages.scrollTop;
       });
-      // --- END: MODIFIED SCRIPT ---
+
+      function isLatestMessageInPosition() {
+        if (!body.classList.contains("game") || !viewer) return false;
+
+        const spacer = qs("#messages-spacer");
+        const latestMessage = spacer.previousElementSibling;
+        if (!latestMessage || !latestMessage.classList.contains("message"))
+          return true;
+
+        const elementToAlign =
+          latestMessage.querySelector(".thumb") ||
+          latestMessage.querySelector(".bubble");
+        if (!elementToAlign) return false;
+
+        const viewerRect = viewer.getBoundingClientRect();
+        const elementRect = elementToAlign.getBoundingClientRect();
+        const desiredTop = viewerRect.bottom + GAP;
+
+        // We are "in position" if:
+        // 1. The message is close to the desired pin position.
+        if (Math.abs(elementRect.top - desiredTop) < 10) {
+          return true;
+        }
+        // 2. OR the message is above the pin position, but we're scrolled to the very bottom
+        //    (meaning there's not enough content to push it down to the pin position).
+        if (elementRect.top < desiredTop && atBottom()) {
+          return true;
+        }
+
+        return false;
+      }
 
       messages.addEventListener(
         "wheel",
@@ -953,14 +1169,34 @@
                   span.style.display = "inline-block";
                   span.style.animation = "wordFadeIn 0.4s ease-out forwards";
                   targetElement.appendChild(span);
-                  if (autoStick) {
-                    if (body.classList.contains("game")) {
-                      const msgEl = element.closest(".message");
-                      if (msgEl)
-                        scrollMessageIntoPosition(msgEl, { behavior: "auto" });
-                    } else {
-                      scrollToBottom("auto");
+                  // --- START: MODIFIED SCRIPT ---
+                  if (
+                    autoStick &&
+                    body.classList.contains("game") &&
+                    settings.gameModePinning
+                  ) {
+                    // --- END: MODIFIED SCRIPT ---
+                    // In game mode, we need to manually scroll to keep the newest text visible,
+                    // as the bubble can grow past the bottom of the viewport.
+                    const bubbleEl = element; // This is the .bubble div
+                    const promptRect = promptBar.getBoundingClientRect();
+                    const bubbleRect = bubbleEl.getBoundingClientRect();
+
+                    // Define the bottom of the visible chat area (prompt bar top, with a small buffer)
+                    const visibleBottom = promptRect.top - 20;
+
+                    // If the bottom of the bubble has gone past the visible area...
+                    if (bubbleRect.bottom > visibleBottom) {
+                      // ...scroll the container up by the difference.
+                      const scrollAmount = bubbleRect.bottom - visibleBottom;
+                      messages.scrollBy({
+                        top: scrollAmount,
+                        behavior: "auto",
+                      });
                     }
+                  } else if (autoStick) {
+                    // In normal mode, the old behavior is correct.
+                    scrollToBottom("auto");
                   }
                   await new Promise((r) => setTimeout(r, speed));
                 }
@@ -972,14 +1208,18 @@
               }
               targetElement.appendChild(newElement);
 
-              if (autoStick) {
-                if (body.classList.contains("game")) {
-                  const msgEl = element.closest(".message");
-                  if (msgEl)
-                    scrollMessageIntoPosition(msgEl, { behavior: "auto" });
-                } else {
-                  scrollToBottom("auto");
-                }
+              // --- START: MODIFIED SCRIPT ---
+              if (
+                autoStick &&
+                body.classList.contains("game") &&
+                settings.gameModePinning
+              ) {
+                // --- END: MODIFIED SCRIPT ---
+                const msgEl = element.closest(".message");
+                if (msgEl)
+                  scrollMessageIntoPosition(msgEl, { behavior: "auto" });
+              } else if (autoStick) {
+                scrollToBottom("auto");
               }
 
               await streamNode(child, newElement);
@@ -1089,7 +1329,13 @@
 
         markLatestAssistant();
 
-        if (wasStuck && body.classList.contains("game")) {
+        // --- START: MODIFIED SCRIPT ---
+        if (
+          wasStuck &&
+          body.classList.contains("game") &&
+          settings.gameModePinning
+        ) {
+          // --- END: MODIFIED SCRIPT ---
           requestAnimationFrame(() =>
             scrollMessageIntoPosition(wrap, { behavior: "smooth" })
           );
@@ -1208,7 +1454,11 @@
           const idx = gallery.indexOf(src);
           if (ind) ind.textContent = `${idx + 1}/${gallery.length}`;
 
-          if (body.classList.contains("game") && viewer.originThumb) {
+          if (
+            body.classList.contains("game") &&
+            viewer.originThumb &&
+            settings.gameModePinning
+          ) {
             const messageToScroll = viewer.originThumb.closest(".message");
             if (messageToScroll) {
               requestAnimationFrame(() =>
@@ -1299,7 +1549,7 @@
 
         const smoothResizeLoop = () => {
           if (!verticalResize.active) return;
-          if (viewer.originThumb) {
+          if (viewer.originThumb && settings.gameModePinning) {
             const messageToPin = viewer.originThumb.closest(".message");
             if (messageToPin) {
               scrollMessageIntoPosition(messageToPin, { behavior: "auto" });
@@ -1482,7 +1732,7 @@
           viewer.dataset.defaultHeight = viewer.style.height;
         }
 
-        if (on) {
+        if (on && settings.gameModePinning) {
           setTimeout(() => {
             requestAnimationFrame(() => {
               if (viewer && viewer.originThumb) {
@@ -1560,10 +1810,8 @@
         const txt = promptInput.value.trim();
         if (!txt) return;
 
-        // --- START: MODIFIED SCRIPT ---
         // Re-engage auto-sticking on every user submission. This is the most reliable way.
         autoStick = true;
-        // --- END: MODIFIED SCRIPT ---
 
         const userText = promptInput.value;
         promptInput.value = "";
@@ -1573,7 +1821,11 @@
         const userMessageEl = await addMessage(userText, { from: "user" });
 
         if (wasStuck) {
-          if (body.classList.contains("game") && viewer) {
+          if (
+            body.classList.contains("game") &&
+            viewer &&
+            settings.gameModePinning
+          ) {
             requestAnimationFrame(() => {
               scrollMessageIntoPosition(userMessageEl, { behavior: "smooth" });
             });
@@ -1603,8 +1855,6 @@
         closeViewer();
       };
 
-      // --- START: MODIFIED SCRIPT ---
-      // Added new hotkeys for viewer and game mode control.
       window.addEventListener("keydown", (e) => {
         if (e.key === "Tab" && !e.altKey) {
           e.preventDefault();
@@ -1643,12 +1893,11 @@
           }
         }
       });
-      // --- END: MODIFIED SCRIPT ---
 
       window.addEventListener("resize", () => {
         fitViewer();
         requestAnimationFrame(() => {
-          if (viewer && viewer.originThumb) {
+          if (viewer && viewer.originThumb && settings.gameModePinning) {
             const messageToScroll = viewer.originThumb.closest(".message");
             if (messageToScroll)
               scrollMessageIntoPosition(messageToScroll, { behavior: "auto" });
@@ -1660,7 +1909,7 @@
         if (e.propertyName === "transform") {
           fitViewer();
           requestAnimationFrame(() => {
-            if (viewer && viewer.originThumb) {
+            if (viewer && viewer.originThumb && settings.gameModePinning) {
               const messageToScroll = viewer.originThumb.closest(".message");
               if (messageToScroll)
                 scrollMessageIntoPosition(messageToScroll, {
@@ -1696,7 +1945,6 @@ What do you do?`
         );
         scrollToBottom("auto");
       }
-      initializeChat();
 
       function adjustViewerHeightForPrompt() {
         if (!body.classList.contains("game") || !viewer) return;
@@ -1717,7 +1965,7 @@ What do you do?`
         viewer.style.height = `${newHeight}px`;
 
         requestAnimationFrame(() => {
-          if (viewer.originThumb) {
+          if (viewer.originThumb && settings.gameModePinning) {
             const messageToPin = viewer.originThumb.closest(".message");
             if (messageToPin)
               scrollMessageIntoPosition(messageToPin, { behavior: "auto" });
@@ -1762,7 +2010,46 @@ What do you do?`
         promptInput.addEventListener("input", resizePrompt);
         resizePrompt();
       }
+
+      // --- START: MODIFIED SCRIPT ---
+      function setupSettings() {
+        const settingsModal = qs("#settings-modal");
+        const settingsBtn = qs("#settings-btn");
+        const closeSettingsBtn = qs("#close-settings-btn");
+        const toggle = qs("#game-mode-pinning-toggle");
+
+        const saveSettings = () => {
+          localStorage.setItem("roam-settings", JSON.stringify(settings));
+        };
+
+        const loadSettings = () => {
+          const saved = localStorage.getItem("roam-settings");
+          if (saved) {
+            settings = { ...settings, ...JSON.parse(saved) };
+          }
+          toggle.checked = settings.gameModePinning;
+        };
+
+        settingsBtn.onclick = () => (settingsModal.style.display = "flex");
+        closeSettingsBtn.onclick = () => (settingsModal.style.display = "none");
+        settingsModal.onclick = (e) => {
+          if (e.target === settingsModal) {
+            settingsModal.style.display = "none";
+          }
+        };
+
+        toggle.addEventListener("change", (e) => {
+          settings.gameModePinning = e.target.checked;
+          saveSettings();
+        });
+
+        loadSettings();
+      }
+
+      initializeChat();
       setupPromptAutoResize();
+      setupSettings();
+      // --- END: MODIFIED SCRIPT ---
     </script>
   </body>
 </html>
