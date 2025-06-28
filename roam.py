@@ -64,6 +64,7 @@ LLM_MODELS = {
     "qwen": "qwen-2.5-32b",
     "l4m": "meta-llama/llama-4-maverick-17b-128e-instruct",
     "l4s": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "g2f": "gemini-2.0-flash-001",
 }
 
 DIFFUSION_MODLES = {
@@ -248,13 +249,23 @@ Remember to prompt each section as if it doesn't know what happened in the story
         self.resolution_preset = self.args.resolution
         self.format_tools()
 
-        self.brain = GroqBrain(
-            model=LLM_MODELS[self.args.model],
-            messages=[
-                ChatCompletionSystemMessageParam(role="system", content=self.system),
-            ],
-            default_tools=self.tools,
-        )
+        model_name = LLM_MODELS[self.args.model]
+        if model_name.startswith("gemini"):
+            from google_brains import GoogleBrain
+
+            self.brain = GoogleBrain(
+                model=model_name,
+                messages=[{"role": "system", "content": self.system}],
+                default_tools=self.tools,
+            )
+        else:
+            self.brain = GroqBrain(
+                model=model_name,
+                messages=[
+                    ChatCompletionSystemMessageParam(role="system", content=self.system),
+                ],
+                default_tools=self.tools,
+            )
         self.functions = {
             "generate_scene_image": {
                 "function": lambda args: ...,
