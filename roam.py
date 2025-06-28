@@ -887,9 +887,12 @@ Remember to prompt each section as if it doesn't know what happened in the story
         self, input: str, ai: Optional[str], hijack: bool, live: Live
     ) -> Generator[STREAM_RESPONSE, None, None]:
         last_tool = None
+        last_content = ""
         for chunk, content, tool_call in self.stream(input=input, ai=ai):
             if tool_call is not None:
                 last_tool = tool_call
+            if content:
+                last_content = content
             yield chunk, content, tool_call
         if hijack:
             for chunk, content, tool_call in self.uncensor(
@@ -914,6 +917,8 @@ Remember to prompt each section as if it doesn't know what happened in the story
                     msg_count += 1
                 yield chunk, content, tool_call
             self.brain.clear_last_messages(msg_count + 1, keep=msg_count)
+            if live is not None:
+                live.update(Markdown(last_content))
         self.save_messages()
 
     def uncensor(
