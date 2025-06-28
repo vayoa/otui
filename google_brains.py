@@ -168,3 +168,42 @@ class GoogleBrain(Brain[Message, Tool]):
                 model=model, contents=contents, config=config
             )
         )
+
+    def quick_format(self, input: str, model: str | None = None) -> dict:
+        """Quickly format a prompt and return JSON using Google's API."""
+
+        new_messages: list[Message] = []
+
+        for message in self.messages:
+            if message.get("role") not in {"user", "assistant", "system"}:
+                continue
+
+            if set(message.keys()) != {"role", "content"}:
+                text = str(message.get("content", ""))
+                for key, value in message.items():
+                    if key not in {"role", "content"}:
+                        text += f"\n{key}: {value}"
+                new_messages.append({"role": message["role"], "content": text})
+            else:
+                new_messages.append(message)
+
+        new_messages.append({"role": "user", "content": input})
+        new_messages = new_messages[-self.message_limit :]
+
+        system_instruction = None
+        if new_messages and new_messages[0].get("role") == "system":
+            system_instruction = new_messages[0].get("content", "")
+            new_messages = new_messages[1:]
+
+        contents = self._to_contents(new_messages)
+
+        config = types.GenerateContentConfig(
+            system_instruction=[system_instruction] if system_instruction else None,
+            response_mime_type="application/json",
+        )
+
+        response = self.client.models.generate_content(
+            model=model or self.model, contents=contents, config=config
+        )
+
+        return json.loads(response.text or "{}")
