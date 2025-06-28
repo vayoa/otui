@@ -4,19 +4,15 @@ import os
 import random
 import re
 from typing import Callable, Generator, List, Literal, Optional, TypedDict
-from groq_brains import GroqBrain, Message
+from groq_brains import GroqBrain
+from google_brains import GoogleBrain
+from llm_types import LLMMessage as Message
 from eyes import Eyes
 from ui import STREAM_RESPONSE, TOOL_CALL, UI
 from rich import print
 from rich.console import Group, RenderableType
 from rich.rule import Rule
-from groq.types.chat import (
-    ChatCompletionSystemMessageParam,
-    ChatCompletionAssistantMessageParam,
-    ChatCompletionToolMessageParam,
-    ChatCompletionMessageToolCallParam,
-    ChatCompletionToolParam,
-)
+from groq.types.chat import ChatCompletionToolParam
 from rich.markdown import Markdown
 import json
 import threading
@@ -64,6 +60,7 @@ LLM_MODELS = {
     "qwen": "qwen-2.5-32b",
     "l4m": "meta-llama/llama-4-maverick-17b-128e-instruct",
     "l4s": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "gem": "gemini-2.0-flash",
 }
 
 DIFFUSION_MODLES = {
@@ -248,13 +245,18 @@ Remember to prompt each section as if it doesn't know what happened in the story
         self.resolution_preset = self.args.resolution
         self.format_tools()
 
-        self.brain = GroqBrain(
-            model=LLM_MODELS[self.args.model],
-            messages=[
-                ChatCompletionSystemMessageParam(role="system", content=self.system),
-            ],
-            default_tools=self.tools,
-        )
+        model_name = LLM_MODELS[self.args.model]
+        if model_name.startswith("gemini"):
+            self.brain = GoogleBrain(
+                model=model_name,
+                messages=[{"role": "system", "content": self.system}],
+            )
+        else:
+            self.brain = GroqBrain(
+                model=model_name,
+                messages=[{"role": "system", "content": self.system}],
+                default_tools=self.tools,
+            )
         self.functions = {
             "generate_scene_image": {
                 "function": lambda args: ...,
@@ -693,8 +695,8 @@ Remember to prompt each section as if it doesn't know what happened in the story
     def handle_tools(self, delta) -> Optional[
         tuple[
             TOOL_CALL,
-            ChatCompletionAssistantMessageParam,
-            ChatCompletionToolMessageParam,
+            Message,
+            Message,
         ]
     ]:
         if delta.tool_calls is not None:
@@ -706,19 +708,19 @@ Remember to prompt each section as if it doesn't know what happened in the story
                 and tool_call_func.name is not None
                 and tool_call_func.arguments is not None
             ):
-                tool_call_m = ChatCompletionAssistantMessageParam(
-                    role="assistant",
-                    tool_calls=[
-                        ChatCompletionMessageToolCallParam(
-                            id=tool_call.id,
-                            function={
+                tool_call_m: Message = {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "id": tool_call.id,
+                            "function": {
                                 "name": tool_call_func.name,
                                 "arguments": tool_call_func.arguments,
                             },
-                            type="function",
-                        )
+                            "type": "function",
+                        }
                     ],
-                )
+                }
 
                 args = json.loads(tool_call_func.arguments or "{}")
                 ui_tool_call = TOOL_CALL(
@@ -726,13 +728,13 @@ Remember to prompt each section as if it doesn't know what happened in the story
                     args=args,
                     result=self.functions[tool_call_func.name]["function"](args),
                 )
-                tool_use_m = ChatCompletionToolMessageParam(
-                    role="tool",
-                    tool_call_id=tool_call.id,
-                    content=self.functions[tool_call_func.name]["result_function"](
-                        ui_tool_call
-                    ),
-                )
+                tool_use_m: Message = {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": self.functions[tool_call_func.name][
+                        "result_function"
+                    ](ui_tool_call),
+                }
                 return ui_tool_call, tool_call_m, tool_use_m
 
     def stream(

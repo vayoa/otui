@@ -18,19 +18,19 @@ import inspect
 from groq import Groq
 from groq.types.chat import (
     ChatCompletionMessageParam,
-    ChatCompletionUserMessageParam,
-    ChatCompletionSystemMessageParam,
     ChatCompletion,
     ChatCompletionChunk,
     ChatCompletionToolParam,
+    ChatCompletionMessageToolCallParam,
 )
 from groq._types import NOT_GIVEN
 from groq._streaming import Stream
 from rich import print
 from brains import Brain
 from vstore import VStore
+from llm_types import LLMMessage, LLMToolCall
 
-Message = ChatCompletionMessageParam
+Message = LLMMessage
 
 
 @dataclass
@@ -92,7 +92,12 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
         rag=True,
     ) -> ChatCompletion | Stream[ChatCompletionChunk]:
         if isinstance(input, str):
-            input = [ChatCompletionUserMessageParam(role="user", content=input)]
+            input = [
+                {
+                    "role": "user",
+                    "content": input,
+                }
+            ]
         input = list(input)
 
         model = model or self.model
@@ -168,9 +173,28 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
 
         self.add_messages(input)
 
+        groq_messages: list[ChatCompletionMessageParam] = []
+        for m in messages:
+            gm: ChatCompletionMessageParam = {
+                "role": m["role"],
+                "content": m.get("content", ""),
+            }
+            if "tool_calls" in m:
+                gm["tool_calls"] = [
+                    ChatCompletionMessageToolCallParam(
+                        id=tc["id"],
+                        function=tc["function"],
+                        type="function",
+                    )
+                    for tc in m.get("tool_calls", [])
+                ]
+            if "tool_call_id" in m:
+                gm["tool_call_id"] = m["tool_call_id"]
+            groq_messages.append(gm)
+
         return self.client.chat.completions.create(
             model=model,
-            messages=messages,  # type: ignore
+            messages=groq_messages,  # type: ignore
             stream=stream,  # type: ignore
             temperature=1,
             max_tokens=1024,
@@ -201,9 +225,7 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
                 self.vstore.update_content(content, index)
 
     def change_system(self, content: str):
-        self.messages[0] = ChatCompletionSystemMessageParam(
-            role="system", content=content
-        )
+        self.messages[0] = {"role": "system", "content": content}
         self.vstore.change_system(content)
 
     def quick_format(self, input: str, model=None) -> dict:
@@ -224,16 +246,22 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
                         }
             new_messages.append(new_message)
 
-        new_messages.extend(
-            [ChatCompletionUserMessageParam(role="user", content=input)]
-        )
+        new_messages.append({"role": "user", "content": input})
 
         new_messages = new_messages[-self.message_limit :]
+
+        groq_messages = [
+            {
+                "role": m["role"],
+                "content": m.get("content", ""),
+            }
+            for m in new_messages
+        ]
 
         return json.loads(
             self.client.chat.completions.create(
                 model=model or self.model,
-                messages=new_messages,
+                messages=groq_messages,
                 stream=False,
                 temperature=1,
                 max_tokens=1024,
