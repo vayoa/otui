@@ -34,7 +34,14 @@ class ToolFunction(TypedDict):
     parameter_descriptions: Sequence[str]
 
 
-Message = TypeVar("Message")
+class MessageDict(TypedDict, total=False):
+    """Unified message format used across brain implementations."""
+
+    role: str
+    content: str
+
+
+Message = MessageDict
 Tool = TypeVar("Tool")
 
 

@@ -27,10 +27,10 @@ from groq.types.chat import (
 from groq._types import NOT_GIVEN
 from groq._streaming import Stream
 from rich import print
-from brains import Brain
+from brains import Brain, MessageDict
 from vstore import VStore
 
-Message = ChatCompletionMessageParam
+Message = MessageDict
 
 
 @dataclass
