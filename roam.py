@@ -5,6 +5,7 @@ import random
 import re
 from typing import Callable, Generator, List, Literal, Optional, TypedDict
 from groq_brains import GroqBrain, Message
+from google_brains import GoogleBrain
 from eyes import Eyes
 from ui import STREAM_RESPONSE, TOOL_CALL, UI
 from rich import print
@@ -64,6 +65,7 @@ LLM_MODELS = {
     "qwen": "qwen-2.5-32b",
     "l4m": "meta-llama/llama-4-maverick-17b-128e-instruct",
     "l4s": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "gem": "gemini-2.0-flash",
 }
 
 DIFFUSION_MODLES = {
@@ -194,7 +196,7 @@ Remember to prompt each section as if it doesn't know what happened in the story
                                 },
                             },
                         },
-                        "required": ["prompt", "danbooru", "genders", "sections"],
+                        "required": ["prompt", "danbooru", "genders", "style"],
                     },
                 },
                 "type": "function",
@@ -248,13 +250,22 @@ Remember to prompt each section as if it doesn't know what happened in the story
         self.resolution_preset = self.args.resolution
         self.format_tools()
 
-        self.brain = GroqBrain(
-            model=LLM_MODELS[self.args.model],
-            messages=[
-                ChatCompletionSystemMessageParam(role="system", content=self.system),
-            ],
-            default_tools=self.tools,
-        )
+        model_key = self.args.model
+        model_name = LLM_MODELS[model_key]
+        if model_key == "gem":
+            self.brain = GoogleBrain(
+                model=model_name,
+                messages=[{"role": "system", "content": self.system}],
+                default_tools=self.tools,
+            )
+        else:
+            self.brain = GroqBrain(
+                model=model_name,
+                messages=[
+                    ChatCompletionSystemMessageParam(role="system", content=self.system),
+                ],
+                default_tools=self.tools,
+            )
         self.functions = {
             "generate_scene_image": {
                 "function": lambda args: ...,
