@@ -161,8 +161,9 @@
       #settings-btn:hover {
         background: rgba(255, 255, 255, 0.2);
       }
+      /* --- START: MODIFICATION --- */
       .settings-modal {
-        position: absolute;
+        position: fixed;
         inset: 0;
         background: rgba(0, 0, 0, 0.6);
         backdrop-filter: var(--blur);
@@ -171,14 +172,33 @@
         justify-content: center;
         z-index: 100;
         padding: 1rem;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease, visibility 0s 0.2s; /* Faster animation */
       }
+      .settings-modal.visible {
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.2s ease, visibility 0s 0s;
+      }
+
       .settings-modal-content {
         background: #181c2b;
         border: 1px solid var(--stroke);
-        border-radius: 8px;
+        border-radius: 12px;
         width: 100%;
+        max-width: 500px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.37);
+        transform: scale(0.95);
+        opacity: 0;
+        transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1),
+          opacity 0.15s ease; /* Faster animation */
       }
+      .settings-modal.visible .settings-modal-content {
+        transform: scale(1);
+        opacity: 1;
+      }
+      /* --- END: MODIFICATION --- */
       .settings-modal-content .settings-header {
         display: flex;
         justify-content: space-between;
@@ -192,11 +212,18 @@
         font-size: 16px;
         font-weight: 500;
       }
+      /* --- START: MODIFICATION --- */
       .settings-modal-content #close-settings-btn {
         font-size: 1rem;
         background: none;
         border: none;
+        border-radius: 6px;
+        transition: background-color 0.2s ease; /* Removed transform */
       }
+      .settings-modal-content #close-settings-btn:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+      }
+      /* --- END: MODIFICATION --- */
       .settings-body {
         padding: 1rem;
         display: flex;
@@ -1124,6 +1151,26 @@
         const desiredTop = viewerRect.bottom + GAP;
         const scrollDelta = elementRect.top - desiredTop;
 
+        // --- START: MODIFICATION ---
+        // This is the core fix for the resizing/sticking bug.
+        // We check if the message to be pinned is the *actual* latest message.
+        const isLatestMessage =
+          message.nextElementSibling &&
+          message.nextElementSibling.id === "messages-spacer";
+
+        // If it IS the latest message, pinning is ON, we're at the bottom, AND
+        // the scroll would be upwards (negative delta), then we bail.
+        // This prevents the message from "jumping up" to the pin position.
+        if (
+          isLatestMessage &&
+          settings.gameModePinning &&
+          atBottom() &&
+          scrollDelta < 0
+        ) {
+          return;
+        }
+        // --- END: MODIFICATION ---
+
         messages.scrollBy({
           top: scrollDelta,
           behavior: behavior,
@@ -1312,8 +1359,6 @@
 
         markLatestAssistant();
 
-        // This logic ensures new messages are always aligned correctly in game mode
-        // to fix the bug, regardless of the pinning setting.
         if (wasStuck && body.classList.contains("game")) {
           requestAnimationFrame(() =>
             scrollMessageIntoPosition(wrap, { behavior: "smooth" })
@@ -1438,12 +1483,16 @@
             viewer.originThumb &&
             settings.gameModePinning
           ) {
-            const messageToScroll = viewer.originThumb.closest(".message");
-            if (messageToScroll) {
+            // --- START: MODIFICATION ---
+            // When opening/changing an image, always try to pin the *latest* message, not the one
+            // associated with the image that was just opened.
+            const latestMessage = qs("#messages-spacer").previousElementSibling;
+            if (latestMessage && latestMessage.classList.contains("message")) {
               requestAnimationFrame(() =>
-                scrollMessageIntoPosition(messageToScroll)
+                scrollMessageIntoPosition(latestMessage)
               );
             }
+            // --- END: MODIFICATION ---
           }
 
           if (viewer.style.opacity === "1") fitViewer();
@@ -1478,6 +1527,8 @@
           if (!message) return;
 
           if (body.classList.contains("game")) {
+            // Jumping to a specific message should break auto-sticking
+            autoStick = false;
             scrollMessageIntoPosition(message, { behavior: "smooth" });
           } else {
             message.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1526,21 +1577,18 @@
           cornerResize.y = e.clientY;
         });
 
-        // --- START: MODIFIED SCRIPT ---
-        // This loop realigns the message during vertical resizing. It should run
-        // regardless of the pinning setting.
+        // --- START: MODIFICATION ---
+        // This loop now correctly pins the *latest* message during a resize.
         const smoothResizeLoop = () => {
           if (!verticalResize.active) return;
-          if (viewer.originThumb) {
-            const messageToPin = viewer.originThumb.closest(".message");
-            if (messageToPin) {
-              scrollMessageIntoPosition(messageToPin, { behavior: "auto" });
-            }
+          const messageToPin = qs("#messages-spacer").previousElementSibling;
+          if (messageToPin && messageToPin.classList.contains("message")) {
+            scrollMessageIntoPosition(messageToPin, { behavior: "auto" });
           }
           verticalResize.animationFrameId =
             requestAnimationFrame(smoothResizeLoop);
         };
-        // --- END: MODIFIED SCRIPT ---
+        // --- END: MODIFICATION ---
 
         verticalHandle.addEventListener("mousedown", (e) => {
           if (!viewer.classList.contains("full")) return;
@@ -1718,14 +1766,19 @@
         if (on) {
           setTimeout(() => {
             requestAnimationFrame(() => {
-              if (viewer && viewer.originThumb) {
-                const messageToScroll = viewer.originThumb.closest(".message");
-                if (messageToScroll) {
-                  scrollMessageIntoPosition(messageToScroll, {
-                    behavior: "auto",
-                  });
-                }
+              // --- START: MODIFICATION ---
+              const latestMessage =
+                qs("#messages-spacer").previousElementSibling;
+              if (
+                viewer &&
+                latestMessage &&
+                latestMessage.classList.contains("message")
+              ) {
+                scrollMessageIntoPosition(latestMessage, {
+                  behavior: "auto",
+                });
               }
+              // --- END: MODIFICATION ---
             });
           }, 450);
         }
@@ -1803,9 +1856,6 @@
         const wasStuck = autoStick;
         const userMessageEl = await addMessage(userText, { from: "user" });
 
-        // This logic is restored from old.html to ensure the user's new message
-        // is always scrolled into position in game mode, fixing the bug where it
-        // would sometimes be hidden by the `else` case.
         if (wasStuck) {
           if (body.classList.contains("game") && viewer) {
             requestAnimationFrame(() => {
@@ -1876,37 +1926,30 @@
         }
       });
 
-      // --- START: MODIFIED SCRIPT ---
-      // Realign the message during window resize events, regardless of pinning setting.
-      window.addEventListener("resize", () => {
+      // --- START: MODIFICATION ---
+      // This group of event listeners now correctly finds the LATEST message and
+      // tells the scroll function to pin that one. This fixes the bug where
+      // resizing would incorrectly try to pin an older message.
+      function pinLatestMessageOnLayoutChange() {
         fitViewer();
         requestAnimationFrame(() => {
-          if (viewer && viewer.originThumb) {
-            const messageToScroll = viewer.originThumb.closest(".message");
-            if (messageToScroll)
-              scrollMessageIntoPosition(messageToScroll, { behavior: "auto" });
+          if (viewer) {
+            const latestMessage = qs("#messages-spacer").previousElementSibling;
+            if (latestMessage && latestMessage.classList.contains("message")) {
+              scrollMessageIntoPosition(latestMessage, { behavior: "auto" });
+            }
           }
         });
-      });
-      // --- END: MODIFIED SCRIPT ---
+      }
 
-      // --- START: MODIFIED SCRIPT ---
-      // Realign the message after the sidebar opens/closes, regardless of pinning setting.
+      window.addEventListener("resize", pinLatestMessageOnLayoutChange);
+
       qs("#sidebar").addEventListener("transitionend", (e) => {
         if (e.propertyName === "transform") {
-          fitViewer();
-          requestAnimationFrame(() => {
-            if (viewer && viewer.originThumb) {
-              const messageToScroll = viewer.originThumb.closest(".message");
-              if (messageToScroll)
-                scrollMessageIntoPosition(messageToScroll, {
-                  behavior: "auto",
-                });
-            }
-          });
+          pinLatestMessageOnLayoutChange();
         }
       });
-      // --- END: MODIFIED SCRIPT ---
+      // --- END: MODIFICATION ---
 
       function generateRandomMultilineText() {
         const line =
@@ -1934,8 +1977,8 @@ What do you do?`
         scrollToBottom("auto");
       }
 
-      // --- START: MODIFIED SCRIPT ---
-      // Realign the message when the prompt bar resizes, regardless of pinning setting.
+      // --- START: MODIFICATION ---
+      // Realign the latest message when the prompt bar resizes.
       function adjustViewerHeightForPrompt() {
         if (!body.classList.contains("game") || !viewer) return;
 
@@ -1955,14 +1998,12 @@ What do you do?`
         viewer.style.height = `${newHeight}px`;
 
         requestAnimationFrame(() => {
-          if (viewer.originThumb) {
-            const messageToPin = viewer.originThumb.closest(".message");
-            if (messageToPin)
-              scrollMessageIntoPosition(messageToPin, { behavior: "auto" });
-          }
+          const latestMessage = qs("#messages-spacer").previousElementSibling;
+          if (latestMessage && latestMessage.classList.contains("message"))
+            scrollMessageIntoPosition(latestMessage, { behavior: "auto" });
         });
       }
-      // --- END: MODIFIED SCRIPT ---
+      // --- END: MODIFICATION ---
 
       let promptResizeTimeoutId = null;
 
@@ -2020,13 +2061,38 @@ What do you do?`
           toggle.checked = settings.gameModePinning;
         };
 
-        settingsBtn.onclick = () => (settingsModal.style.display = "flex");
-        closeSettingsBtn.onclick = () => (settingsModal.style.display = "none");
+        // --- START: MODIFICATION ---
+        const openSettings = () => {
+          settingsModal.style.display = "flex";
+          // Use a micro-task to ensure the 'display' change has rendered
+          // before adding the class that triggers the transition.
+          requestAnimationFrame(() => {
+            settingsModal.classList.add("visible");
+          });
+        };
+
+        const closeSettings = () => {
+          settingsModal.classList.remove("visible");
+          settingsModal.addEventListener(
+            "transitionend",
+            (e) => {
+              // Ensure we only listen for the transition on the modal itself
+              if (e.target === settingsModal) {
+                settingsModal.style.display = "none";
+              }
+            },
+            { once: true }
+          );
+        };
+
+        settingsBtn.onclick = openSettings;
+        closeSettingsBtn.onclick = closeSettings;
         settingsModal.onclick = (e) => {
           if (e.target === settingsModal) {
-            settingsModal.style.display = "none";
+            closeSettings();
           }
         };
+        // --- END: MODIFICATION ---
 
         toggle.addEventListener("change", (e) => {
           settings.gameModePinning = e.target.checked;
