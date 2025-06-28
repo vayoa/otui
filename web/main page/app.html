@@ -1359,6 +1359,7 @@
         }
         const wrap = document.createElement("div");
         wrap.className = `message ${from}`;
+        wrap.dataset.index = qsa(".message", messages).length;
         wrap.style.animation = "fadeIn .2s forwards";
         wrap.dataset.rawText = text;
 
@@ -1866,13 +1867,13 @@
       }
       // --- END: MODIFICATION (FIX) ---
 
-      document.addEventListener("click", (e) => {
+      document.addEventListener("click", async (e) => {
         if (e.target.matches(".edit-btn")) {
           const btn = e.target;
           const msgEl = btn.closest(".message");
           const bubble = msgEl.querySelector(".bubble");
 
-          const finishEdit = () => {
+          const finishEdit = async () => {
             const newRawText = bubble.innerText;
             msgEl.dataset.rawText = newRawText;
 
@@ -1884,6 +1885,17 @@
             btn.textContent = "Edit";
             bubble.removeEventListener("keydown", onKeydown);
             bubble.removeEventListener("focusout", onFocusOut);
+
+            if (currentChatId) {
+              await fetch(`${API_BASE}/chats/${currentChatId}/edit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  index: parseInt(msgEl.dataset.index, 10),
+                  content: newRawText,
+                }),
+              });
+            }
           };
 
           const onKeydown = (ev) => {
@@ -1912,8 +1924,17 @@
             finishEdit();
           }
         }
-        if (e.target.matches(".regenerate-btn"))
-          console.log("Regenerate", e.target.closest(".message"));
+        if (e.target.matches(".regenerate-btn")) {
+          const msgEl = e.target.closest(".message");
+          if (currentChatId) {
+            const res = await fetch(
+              `${API_BASE}/chats/${currentChatId}/regenerate`,
+              { method: "POST" }
+            );
+            const data = await res.json();
+            await addMessage(data.content);
+          }
+        }
       });
 
       promptForm.addEventListener("submit", async (e) => {
@@ -1948,9 +1969,18 @@
           }
         }
 
-        await new Promise((r) => setTimeout(r, 700));
-
-        await addMessage(generateRandomMultilineText());
+        if (currentChatId) {
+          const res = await fetch(
+            `${API_BASE}/chats/${currentChatId}/messages`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ content: userText }),
+            }
+          );
+          const data = await res.json();
+          await addMessage(data.content);
+        }
       });
 
       qs("#collapse-sidebar-btn").onclick = () =>
@@ -1958,16 +1988,22 @@
       qs("#toggle-sidebar-btn").onclick = () =>
         body.classList.remove("sidebar-collapsed");
 
-      qs("#new-chat-btn").onclick = qs("#new-chat-icon-btn").onclick = () => {
-        messages.innerHTML = `<div id="messages-spacer"></div>`;
-        qs("#chat-list").insertAdjacentHTML(
-          "beforeend",
-          `<li>Adventure ${qs("#chat-list").children.length + 1}</li>`
-        );
-        gallery = [];
-        assistantCount = 0;
-        closeViewer();
-      };
+      qs("#new-chat-btn").onclick =
+        qs("#new-chat-icon-btn").onclick = async () => {
+          const resp = await fetch(`${API_BASE}/chats`, { method: "POST" });
+          const data = await resp.json();
+          currentChatId = data.id;
+          messages.innerHTML = `<div id="messages-spacer"></div>`;
+          qs("#chat-list").insertAdjacentHTML(
+            "beforeend",
+            `<li data-id="${currentChatId}" class="active">Adventure ${
+              qs("#chat-list").children.length + 1
+            }</li>`
+          );
+          gallery = [];
+          assistantCount = 0;
+          closeViewer();
+        };
 
       window.addEventListener("keydown", (e) => {
         if (qs("#command-palette").classList.contains("visible")) {
@@ -2042,16 +2078,10 @@
       }
 
       async function initializeChat() {
-        qs("#chat-list").innerHTML = "<li>Initial Adventure</li>";
-
-        await addMessage(
-          `You stand at a crossroads. A weathered signpost points in three directions.
-* To the **north**, a path leads into a dark, foreboding forest.
-* To the **east**, the road winds towards a bustling port city.
-* To the **west**, a trail disappears into rolling, sun-drenched hills.
-
-What do you do? Type \`~\` to see available commands.`
-        );
+        const resp = await fetch(`${API_BASE}/chats`, { method: "POST" });
+        const data = await resp.json();
+        currentChatId = data.id;
+        qs("#chat-list").innerHTML = `<li data-id="${currentChatId}" class="active">New Adventure</li>`;
         scrollToBottom("auto");
       }
 
@@ -2188,6 +2218,8 @@ What do you do? Type \`~\` to see available commands.`
         llm: "claude-3-sonnet",
       };
 
+      const API_BASE = "/api";
+      let currentChatId = null;
       let parsedCommands = [];
 
       function executeCommand(commandKey, args = []) {
