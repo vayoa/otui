@@ -11,7 +11,8 @@ from typing import (
     overload,
 )
 from types import SimpleNamespace
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from rich import print
 from brains import Brain
 from vstore import VStore
@@ -102,8 +103,8 @@ def _convert_response(resp) -> Mapping[str, Any]:
 
 @dataclass
 class GoogleBrain(Brain[Message, Mapping[str, Any]]):
-    model: str = "gemini-2.0-flash"
-    client: genai.GenerativeModel = field(init=False)
+    model: str = "gemini-2.0-flash-001"
+    client: genai.Client = field(init=False)
     messages: list[Message] = field(default_factory=list)
     default_tools: Optional[list[Mapping[str, Any]]] = None
     message_limit: int = 25
@@ -113,14 +114,16 @@ class GoogleBrain(Brain[Message, Mapping[str, Any]]):
     latest_rag_context: Optional[list[Message]] = None
 
     def __post_init__(self):
-        genai.configure(
-            api_key=open(
-                r"C:\\Users\\ew0nd\\Documents\\otui\\secrets\\google.txt", "r", encoding="utf-8"
+        api_key = (
+            open(
+                r"C:\\Users\\ew0nd\\Documents\\otui\\secrets\\google.txt",
+                "r",
+                encoding="utf-8",
             )
             .read()
             .strip()
         )
-        self.client = genai.GenerativeModel(self.model)
+        self.client = genai.Client(api_key=api_key)
 
     @overload
     def chat(
@@ -217,12 +220,21 @@ class GoogleBrain(Brain[Message, Mapping[str, Any]]):
         self.add_messages(input)
 
         g_messages = _to_google_messages(messages)
-        resp = self.client.generate_content(g_messages, stream=stream, tools=tools)
+        cfg = None
+        toolset = tools if tools is not None else self.default_tools
+        if toolset:
+            cfg = types.GenerateContentConfig(tools=toolset)
         if stream:
+            resp = self.client.models.generate_content_stream(
+                model=model, contents=g_messages, config=cfg
+            )
             def _gen():
                 for chunk in resp:
                     yield _convert_chunk(chunk)
             return _gen()
+        resp = self.client.models.generate_content(
+            model=model, contents=g_messages, config=cfg
+        )
         return _convert_response(resp)
 
     def clear_last_messages(self, n, keep=None):
@@ -266,5 +278,8 @@ class GoogleBrain(Brain[Message, Mapping[str, Any]]):
 
         new_messages.append({"role": "user", "content": input})
         new_messages = new_messages[-self.message_limit :]
-        resp = self.client.generate_content(_to_google_messages(new_messages))
+        resp = self.client.models.generate_content(
+            model=model or self.model,
+            contents=_to_google_messages(new_messages),
+        )
         return json.loads(resp.text)

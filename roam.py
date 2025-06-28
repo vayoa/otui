@@ -64,7 +64,7 @@ LLM_MODELS = {
     "qwen": "qwen-2.5-32b",
     "l4m": "meta-llama/llama-4-maverick-17b-128e-instruct",
     "l4s": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "g2f": "gemini-2.0-flash",
+    "g2f": "gemini-2.0-flash-001",
 }
 
 DIFFUSION_MODLES = {
