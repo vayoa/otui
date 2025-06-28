@@ -10,12 +10,13 @@ from brains import Brain, BaseMessage, BaseToolParam
 Message = BaseMessage
 Tool = BaseToolParam
 
+
 @dataclass
 class GoogleBrain(Brain[Message, Tool]):
     """Brain implementation using Google's generative models."""
 
-    model: str = "gemini-pro"
-    api_key_path: str = "secrets/google.txt"
+    model: str = "gemini-2.0-flash"
+    api_key_path: str = r"C:\Users\ew0nd\Documents\otui\secrets\google.txt"
     client: genai.Client = field(init=False)
 
     def __post_init__(self):

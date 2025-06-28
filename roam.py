@@ -65,7 +65,7 @@ LLM_MODELS = {
     "qwen": "qwen-2.5-32b",
     "l4m": "meta-llama/llama-4-maverick-17b-128e-instruct",
     "l4s": "meta-llama/llama-4-scout-17b-16e-instruct",
-    "gem": "gemini-pro",
+    "gem": "gemini-2.0-flash",
 }
 
 DIFFUSION_MODLES = {
@@ -262,7 +262,9 @@ Remember to prompt each section as if it doesn't know what happened in the story
             self.brain = GroqBrain(
                 model=model_name,
                 messages=[
-                    ChatCompletionSystemMessageParam(role="system", content=self.system),
+                    ChatCompletionSystemMessageParam(
+                        role="system", content=self.system
+                    ),
                 ],
                 default_tools=self.tools,
             )
