@@ -3,6 +3,8 @@ from typing import Literal, Sequence, Optional, Iterator, Mapping, Any, overload
 from pathlib import Path
 from google import genai
 from google.genai import types
+from types import SimpleNamespace
+import json
 from brains import Brain, BaseMessage, BaseToolParam
 
 Message = BaseMessage
@@ -22,6 +24,8 @@ class GoogleBrain(Brain[Message, Tool]):
         self.client = genai.Client(api_key=api_key)
 
     def _to_contents(self, messages: Sequence[Message]):
+        """Convert messages to Google genai Content objects."""
+
         return [
             types.Content(
                 role=m.get("role", "user"),
@@ -29,6 +33,53 @@ class GoogleBrain(Brain[Message, Tool]):
             )
             for m in messages
         ]
+
+    def _to_tool(self, tool: Tool) -> types.Tool:
+        """Convert a tool definition to the genai Tool format."""
+
+        func = tool.get("function", {})
+        return types.Tool(
+            function_declarations=[
+                types.FunctionDeclaration(
+                    name=func.get("name"),
+                    description=func.get("description"),
+                    parameters_json_schema=func.get("parameters"),
+                )
+            ]
+        )
+
+    def _convert_chunk(self, chunk: genai.types.GenerateContentResponse):
+        """Convert a streaming chunk to a ChatCompletionChunk-like object."""
+
+        content = chunk.text or ""
+
+        tool_calls = None
+        if chunk.function_calls:
+            tool_calls = [
+                SimpleNamespace(
+                    id=fc.id or "",  # type: ignore
+                    function=SimpleNamespace(
+                        name=fc.name,
+                        arguments=json.dumps(fc.args or {}),
+                    ),
+                )
+                for fc in chunk.function_calls
+            ]
+
+        delta = SimpleNamespace(content=content, tool_calls=tool_calls)
+        choice = SimpleNamespace(delta=delta)
+        return SimpleNamespace(choices=[choice])
+
+    def _convert_response(self, resp: genai.types.GenerateContentResponse):
+        """Convert the full response to match Groq's ChatCompletion interface."""
+
+        chunk = self._convert_chunk(resp)
+        message = SimpleNamespace(
+            role="assistant",
+            content=resp.text or "",
+            tool_calls=chunk.choices[0].delta.tool_calls,
+        )
+        return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 
     @overload
     def chat(
@@ -77,14 +128,26 @@ class GoogleBrain(Brain[Message, Tool]):
         self.add_messages(input)
 
         contents = self._to_contents(messages)
+
+        if tools is None:
+            tools = self.default_tools
+
+        genai_tools = [self._to_tool(t) for t in tools] if tools else None
+
         config = types.GenerateContentConfig(
-            response_mime_type="application/json" if format == "json" else "text/plain"
+            tools=genai_tools,
+            response_mime_type="application/json" if format == "json" else "text/plain",
         )
 
         if stream:
-            return self.client.models.generate_content_stream(
-                model=model, contents=contents, tools=tools, config=config
+            for chunk in self.client.models.generate_content_stream(
+                model=model, contents=contents, config=config
+            ):
+                yield self._convert_chunk(chunk)
+            return
+
+        return self._convert_response(
+            self.client.models.generate_content(
+                model=model, contents=contents, config=config
             )
-        return self.client.models.generate_content(
-            model=model, contents=contents, tools=tools, config=config
         )
