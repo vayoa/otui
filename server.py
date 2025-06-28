@@ -5,6 +5,8 @@ from typing import Dict, List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from groq_brains import GroqBrain, Message
@@ -16,6 +18,7 @@ SYSTEM = (
 
 CHAT_DIR = Path("chats")
 CHAT_DIR.mkdir(exist_ok=True)
+HTML_DIR = Path("web/main page")
 
 class Chat:
     def __init__(self):
@@ -46,6 +49,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.get("/")
+def serve_app():
+    return FileResponse(HTML_DIR / "app.html")
+
+app.mount("/", StaticFiles(directory=HTML_DIR), name="static")
+
 chats: Dict[str, Chat] = {}
 
 class SendRequest(BaseModel):
@@ -58,25 +68,36 @@ class EditRequest(BaseModel):
 @app.post("/api/chats")
 def create_chat():
     chat_id = str(uuid.uuid4())
-    chats[chat_id] = Chat()
+    chat = Chat()
+    chats[chat_id] = chat
+    chat.save(chat_id)
     return {"id": chat_id}
 
 @app.get("/api/chats")
 def list_chats():
-    return [{"id": cid} for cid in chats.keys()]
+    ids = [p.stem for p in CHAT_DIR.glob("*.json")]
+    return [{"id": cid} for cid in ids]
 
 @app.get("/api/chats/{chat_id}")
 def get_chat(chat_id: str):
     chat = chats.get(chat_id)
     if not chat:
-        raise HTTPException(status_code=404)
+        file = CHAT_DIR / f"{chat_id}.json"
+        if not file.exists():
+            raise HTTPException(status_code=404)
+        chat = Chat.load(chat_id)
+        chats[chat_id] = chat
     return {"messages": chat.messages()}
 
 @app.post("/api/chats/{chat_id}/messages")
 def send_message(chat_id: str, req: SendRequest):
     chat = chats.get(chat_id)
     if not chat:
-        raise HTTPException(status_code=404)
+        file = CHAT_DIR / f"{chat_id}.json"
+        if not file.exists():
+            raise HTTPException(status_code=404)
+        chat = Chat.load(chat_id)
+        chats[chat_id] = chat
     chat.brain.add_messages([{"role": "user", "content": req.content}])
     answer = ""
     for chunk in chat.brain.chat(input=req.content, stream=True):
@@ -90,7 +111,11 @@ def send_message(chat_id: str, req: SendRequest):
 def edit_message(chat_id: str, req: EditRequest):
     chat = chats.get(chat_id)
     if not chat:
-        raise HTTPException(status_code=404)
+        file = CHAT_DIR / f"{chat_id}.json"
+        if not file.exists():
+            raise HTTPException(status_code=404)
+        chat = Chat.load(chat_id)
+        chats[chat_id] = chat
     chat.brain.update_message_content(req.content, req.index)
     chat.save(chat_id)
     return {"status": "ok"}
@@ -99,7 +124,11 @@ def edit_message(chat_id: str, req: EditRequest):
 def regenerate(chat_id: str):
     chat = chats.get(chat_id)
     if not chat:
-        raise HTTPException(status_code=404)
+        file = CHAT_DIR / f"{chat_id}.json"
+        if not file.exists():
+            raise HTTPException(status_code=404)
+        chat = Chat.load(chat_id)
+        chats[chat_id] = chat
     if len(chat.brain.messages) < 2:
         raise HTTPException(status_code=400)
     user_msg = chat.brain.messages[-2]["content"]
