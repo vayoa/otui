@@ -65,7 +65,7 @@ class Prompter:
                 "hijack": "hijack",
                 "auto-hijack | ah": "toggle auto-hijack mode",
                 "show | s": "generates a picture",
-                # "auto-show | as": "toggle auto-show mode (generates a picture for every response)",
+                "auto-show | as": "toggle auto-show mode (generates a picture for every response)",
                 "messages | m": "shows the current message history",
                 "layout | ly": {
                     "meta": "change the layout of the program",
