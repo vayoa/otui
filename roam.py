@@ -11,6 +11,7 @@ from ui import STREAM_RESPONSE, TOOL_CALL, UI
 from rich import print
 from rich.console import Group, RenderableType
 from rich.rule import Rule
+from rich.live import Live
 from groq.types.chat import (
     ChatCompletionSystemMessageParam,
     ChatCompletionAssistantMessageParam,
@@ -250,6 +251,26 @@ Remember to prompt each section as if it doesn't know what happened in the story
         self.resolution_preset = self.args.resolution
         self.format_tools()
 
+        # store useful parameter definitions for toggles
+        gen_tool_idx = [
+            i
+            for i, t in enumerate(self.tools)
+            if t["function"]["name"] == "generate_scene_image"
+        ][0]
+        props = self.tools[gen_tool_idx]["function"]["parameters"]["properties"]
+        self.dialog_param = props.get("dialog")
+        self.sections_param = props.get("sections")
+        self.dice_tool = [
+            t for t in self.tools if t["function"]["name"] == "roll_dice"
+        ][0]
+
+        if not self.args.dialog and "dialog" in props:
+            props.pop("dialog")
+        if not self.args.sections and "sections" in props:
+            props.pop("sections")
+        if not self.args.dice:
+            self.tools = [t for t in self.tools if t is not self.dice_tool]
+
         model_key = self.args.model
         model_name = LLM_MODELS[model_key]
         if model_key == "gem":
@@ -287,7 +308,7 @@ Remember to prompt each section as if it doesn't know what happened in the story
         assert set(
             tool.get("function", {}).get("name")
             for tool in self.brain.default_tools or {}
-        ) == set(self.functions.keys())
+        ).issubset(set(self.functions.keys()))
 
         self.image_model = self.args.image_model
         self.realistic_image_model = self.args.realistic_image_model
@@ -299,6 +320,9 @@ Remember to prompt each section as if it doesn't know what happened in the story
         self.prompter.add_commands(
             {
                 "dialog | d": "toggle dialog in images",
+                "sections | sec": "toggle sections in images",
+                "dice": "toggle dice roll tool",
+                "auto-show | as": "toggle auto-show mode",
                 "nsfw": "toggle nsfw mode",
                 "image-model | im": {
                     "meta": "change the image generation model",
@@ -432,16 +456,42 @@ Remember to prompt each section as if it doesn't know what happened in the story
                 if tool["function"]["name"] == "generate_scene_image"
             ][0]
             on = "dialog" in self.tools[func_id]["function"]["parameters"]["properties"]  # type: ignore
-            dialog = {
-                "type": "string",
-                "description": "If a character is saying something in the scene, this is her dialog.",
-            }
             if on:
                 self.tools[func_id]["function"]["parameters"]["properties"].pop("dialog")  # type: ignore
             else:
-                self.tools[func_id]["function"]["parameters"]["properties"]["dialog"] = dialog  # type: ignore
+                self.tools[func_id]["function"]["parameters"]["properties"]["dialog"] = self.dialog_param  # type: ignore
+            self.brain.default_tools = self.tools
             self.print(
                 f"[orange bold]Dialog in images is now [italic]{'[bold red]OFF[/]' if on else '[bold green]ON[/]'}."
+            )
+            return True
+        sections_param = params.get("sections", params.get("sec"))
+        if sections_param is not None:
+            func_id = [
+                i
+                for i, tool in enumerate(self.tools)
+                if tool["function"]["name"] == "generate_scene_image"
+            ][0]
+            on = "sections" in self.tools[func_id]["function"]["parameters"]["properties"]  # type: ignore
+            if on:
+                self.tools[func_id]["function"]["parameters"]["properties"].pop("sections")  # type: ignore
+            else:
+                self.tools[func_id]["function"]["parameters"]["properties"]["sections"] = self.sections_param  # type: ignore
+            self.brain.default_tools = self.tools
+            self.print(
+                f"[orange bold]Sections in images are now [italic]{'[bold red]OFF[/]' if on else '[bold green]ON[/]'}."
+            )
+            return True
+        dice_param = params.get("dice")
+        if dice_param is not None:
+            has = any(t["function"]["name"] == "roll_dice" for t in self.tools)
+            if has:
+                self.tools = [t for t in self.tools if t["function"]["name"] != "roll_dice"]
+            else:
+                self.tools.append(self.dice_tool)
+            self.brain.default_tools = self.tools
+            self.print(
+                f"[orange bold]Dice tool is now [italic]{'[bold red]OFF[/]' if has else '[bold green]ON[/]'}."
             )
             return True
         nsfw_param = params.get("nsfw")
@@ -678,7 +728,7 @@ Remember to prompt each section as if it doesn't know what happened in the story
                 sections=sections,
             )
             time.sleep(2)
-
+            self.live.update(content)
             self.live.console.print(
                 Group(prompt_mk, Rule(style="yellow"))
                 if content.markup.strip()
@@ -837,6 +887,53 @@ Remember to prompt each section as if it doesn't know what happened in the story
                 for nchuck, ncontent, nresult in self.stream(None, None):
                     yield nchuck, content + "\n" + ncontent, nresult
 
+    def respond(
+        self, input: str, ai: Optional[str], hijack: bool, live: Live
+    ) -> Generator[STREAM_RESPONSE, None, None]:
+        last_tool = None
+        last_content = ""
+        for chunk, content, tool_call in self.stream(input=input, ai=ai):
+            if tool_call is not None:
+                last_tool = tool_call
+            if content:
+                last_content = content
+            yield chunk, content, tool_call
+        if hijack:
+            for chunk, content, tool_call in self.uncensor(
+                response=self.get_messages()[-1]["content"]
+            ):
+                if tool_call is not None:
+                    last_tool = tool_call
+                yield chunk, content, tool_call
+        if self.args.auto_show and (
+            last_tool is None or last_tool["name"] != "generate_scene_image"
+        ):
+            instruction = (
+                "Use the generate_scene_image tool to draw the last scene."
+            )
+
+            messages_added = 1  # user instruction
+            saw_content = False
+            tool_added = False
+            for _chunk, content, tool_call in self.stream(instruction, None):
+                if live is not None:
+                    live.update(Markdown(last_content))
+                if tool_call is not None and not tool_added:
+                    last_tool = tool_call
+                    tool_added = True
+                    messages_added += 2  # tool_call + tool_use
+                if content and not saw_content:
+                    saw_content = True
+                    messages_added += 1  # assistant text
+            # remove the helper prompt and any assistant text, keep the tool call
+            self.brain.clear_last_messages(messages_added, keep=2)
+            if last_tool is not None:
+                yield "", last_content, last_tool
+            else:
+                if live is not None:
+                    live.update(Markdown(last_content))
+        self.save_messages()
+
     def uncensor(
         self,
         response: str,
@@ -918,9 +1015,9 @@ def args(**kwargs) -> argparse.Namespace:
     parser.add_argument(
         "--auto_show",
         "--as",
-        action="store_false",
+        action="store_true",
         default=kwargs.get("auto_show") or False,
-        help="Initializes otui in auto-show mode.",
+        help="When enabled, automatically generate an image if the model didn't include one.",
     )
 
     parser.add_argument(
@@ -957,6 +1054,31 @@ def args(**kwargs) -> argparse.Namespace:
         default=kwargs.get("game") or False,
         help="Initializes otui in game mode.",
     )
+
+    parser.add_argument(
+        "--no_dialog",
+        dest="dialog",
+        action="store_false",
+        default=kwargs.get("dialog") if "dialog" in kwargs else True,
+        help="Disable dialog parameter in image generation.",
+    )
+
+    parser.add_argument(
+        "--no_sections",
+        dest="sections",
+        action="store_false",
+        default=kwargs.get("sections") if "sections" in kwargs else True,
+        help="Disable sections parameter in image generation.",
+    )
+
+    parser.add_argument(
+        "--no_dice",
+        dest="dice",
+        action="store_false",
+        default=kwargs.get("dice") if "dice" in kwargs else True,
+        help="Disable the dice roll tool.",
+    )
+
 
     parser.add_argument(
         "--resolution",
