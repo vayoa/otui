@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Literal, Sequence, Optional, Iterator, Mapping, Any, overload
-from google import generativeai as genai
+from pathlib import Path
+from google import genai
+from google.genai import types
 from brains import Brain, BaseMessage, BaseToolParam
 
 Message = BaseMessage
@@ -11,16 +13,20 @@ class GoogleBrain(Brain[Message, Tool]):
     """Brain implementation using Google's generative models."""
 
     model: str = "gemini-pro"
-    api_key_path: str = r"C:\\Users\\ew0nd\\Documents\\otui\\secrets\\google.txt"
-    client: genai.GenerativeModel = field(init=False)
+    api_key_path: str = "secrets/google.txt"
+    client: genai.Client = field(init=False)
 
     def __post_init__(self):
-        genai.configure(api_key=open(self.api_key_path, "r", encoding="utf-8").read().strip())
-        self.client = genai.GenerativeModel(self.model)
+        api_key_path = Path(self.api_key_path)
+        api_key = api_key_path.read_text(encoding="utf-8").strip()
+        self.client = genai.Client(api_key=api_key)
 
-    def _to_google_messages(self, messages: Sequence[Message]):
+    def _to_contents(self, messages: Sequence[Message]):
         return [
-            {"role": "user" if m["role"] == "user" else "model", "parts": [m.get("content", "")]}
+            types.Content(
+                role=m.get("role", "user"),
+                parts=[types.Part.from_text(text=m.get("content", ""))],
+            )
             for m in messages
         ]
 
@@ -70,5 +76,15 @@ class GoogleBrain(Brain[Message, Tool]):
 
         self.add_messages(input)
 
-        google_messages = self._to_google_messages(messages)
-        return self.client.generate_content(google_messages, stream=stream, tools=tools)
+        contents = self._to_contents(messages)
+        config = types.GenerateContentConfig(
+            response_mime_type="application/json" if format == "json" else "text/plain"
+        )
+
+        if stream:
+            return self.client.models.generate_content_stream(
+                model=model, contents=contents, tools=tools, config=config
+            )
+        return self.client.models.generate_content(
+            model=model, contents=contents, tools=tools, config=config
+        )

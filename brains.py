@@ -13,7 +13,6 @@ from typing import (
     overload,
     Callable,
 )
-from rich import print
 from vstore import VStore
 import json
 
@@ -164,12 +163,6 @@ class Brain(Generic[Message, Tool]):
 
                 messages = new_filtered_messages
                 self.latest_rag_context = messages
-                with open(
-                    r"C:\Users\ew0nd\Documents\otui\chats\_context_log.json",
-                    "w",
-                    encoding="utf-8",
-                ) as f:
-                    json.dump(self.latest_rag_context, f, indent=4)
 
         return messages
 
