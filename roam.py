@@ -364,9 +364,13 @@ Remember to prompt each section as if it doesn't know what happened in the story
         self.brain.change_system(system_content)
 
     def generate_chat_title(self) -> str:
+        model_key = "l8"
+        if type(self.brain).__name__ == "GoogleBrain":
+            model_key = "gem"
+
         return self.brain.quick_format(
             'The user has logged off! Give this story a short, 3-5 word long title. Use the following json schema: {"title": "<YOUR TITLE>"}',
-            model=LLM_MODELS["l8"],
+            model=LLM_MODELS[model_key],
         )["title"]
 
     def on_close(self):
