@@ -10,6 +10,7 @@ from brains import Brain, BaseMessage, BaseToolParam
 Message = BaseMessage
 Tool = BaseToolParam
 
+
 @dataclass
 class GoogleBrain(Brain[Message, Tool]):
     """Brain implementation using Google's generative models."""
