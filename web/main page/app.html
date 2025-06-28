@@ -143,7 +143,6 @@
         transform: translateX(5px);
       }
 
-      /* --- START: MODIFIED CSS --- */
       #sidebar-footer {
         padding-top: 1rem;
         border-top: 1px solid var(--stroke);
@@ -269,7 +268,6 @@
       .slider.round:before {
         border-radius: 50%;
       }
-      /* --- END: MODIFIED CSS --- */
 
       #main-content {
         height: 100vh;
@@ -882,14 +880,11 @@
         <button id="new-chat-btn">+ Start a new adventure</button>
         <nav>
           <ul id="chat-list"></ul>
-          <!-- --- START: MODIFIED HTML --- -->
           <footer id="sidebar-footer">
             <button id="settings-btn">⚙️ Settings</button>
           </footer>
-          <!-- --- END: MODIFIED HTML --- -->
         </nav>
       </div>
-      <!-- --- START: MODIFIED HTML --- -->
       <div id="settings-modal" class="settings-modal" style="display: none">
         <div class="settings-modal-content">
           <header class="settings-header">
@@ -913,7 +908,6 @@
           </div>
         </div>
       </div>
-      <!-- --- END: MODIFIED HTML --- -->
     </aside>
 
     <div id="main-content">
@@ -975,11 +969,9 @@
           getComputedStyle(document.documentElement).getPropertyValue(n)
         );
 
-      // --- START: MODIFIED SCRIPT ---
       let settings = {
         gameModePinning: false, // Default to OFF, as requested.
       };
-      // --- END: MODIFIED SCRIPT ---
 
       let viewerState = {};
 
@@ -1003,14 +995,12 @@
 
       messages.addEventListener("scroll", () => {
         let shouldBeStuck = false;
-        // --- START: MODIFIED SCRIPT ---
         if (body.classList.contains("game")) {
           // In game mode, "stuck" means the latest message is pinned below the viewer.
           // This behavior is now controlled by a setting.
           shouldBeStuck =
             settings.gameModePinning && isLatestMessageInPosition();
         } else {
-          // --- END: MODIFIED SCRIPT ---
           // In normal mode, "stuck" means we are at the bottom of the chat.
           shouldBeStuck = atBottom();
         }
@@ -1169,33 +1159,28 @@
                   span.style.display = "inline-block";
                   span.style.animation = "wordFadeIn 0.4s ease-out forwards";
                   targetElement.appendChild(span);
-                  // --- START: MODIFIED SCRIPT ---
                   if (
                     autoStick &&
                     body.classList.contains("game") &&
                     settings.gameModePinning
                   ) {
-                    // --- END: MODIFIED SCRIPT ---
-                    // In game mode, we need to manually scroll to keep the newest text visible,
+                    // In game mode with pinning ON, we need to manually scroll to keep the newest text visible,
                     // as the bubble can grow past the bottom of the viewport.
                     const bubbleEl = element; // This is the .bubble div
                     const promptRect = promptBar.getBoundingClientRect();
                     const bubbleRect = bubbleEl.getBoundingClientRect();
 
-                    // Define the bottom of the visible chat area (prompt bar top, with a small buffer)
                     const visibleBottom = promptRect.top - 20;
 
-                    // If the bottom of the bubble has gone past the visible area...
                     if (bubbleRect.bottom > visibleBottom) {
-                      // ...scroll the container up by the difference.
                       const scrollAmount = bubbleRect.bottom - visibleBottom;
                       messages.scrollBy({
                         top: scrollAmount,
                         behavior: "auto",
                       });
                     }
-                  } else if (autoStick) {
-                    // In normal mode, the old behavior is correct.
+                  } else if (autoStick && !body.classList.contains("game")) {
+                    // In normal mode, scroll to bottom. In game mode with pinning OFF, do nothing.
                     scrollToBottom("auto");
                   }
                   await new Promise((r) => setTimeout(r, speed));
@@ -1208,17 +1193,15 @@
               }
               targetElement.appendChild(newElement);
 
-              // --- START: MODIFIED SCRIPT ---
               if (
                 autoStick &&
                 body.classList.contains("game") &&
                 settings.gameModePinning
               ) {
-                // --- END: MODIFIED SCRIPT ---
                 const msgEl = element.closest(".message");
                 if (msgEl)
                   scrollMessageIntoPosition(msgEl, { behavior: "auto" });
-              } else if (autoStick) {
+              } else if (autoStick && !body.classList.contains("game")) {
                 scrollToBottom("auto");
               }
 
@@ -1329,13 +1312,9 @@
 
         markLatestAssistant();
 
-        // --- START: MODIFIED SCRIPT ---
-        if (
-          wasStuck &&
-          body.classList.contains("game") &&
-          settings.gameModePinning
-        ) {
-          // --- END: MODIFIED SCRIPT ---
+        // This logic ensures new messages are always aligned correctly in game mode
+        // to fix the bug, regardless of the pinning setting.
+        if (wasStuck && body.classList.contains("game")) {
           requestAnimationFrame(() =>
             scrollMessageIntoPosition(wrap, { behavior: "smooth" })
           );
@@ -1547,9 +1526,12 @@
           cornerResize.y = e.clientY;
         });
 
+        // --- START: MODIFIED SCRIPT ---
+        // This loop realigns the message during vertical resizing. It should run
+        // regardless of the pinning setting.
         const smoothResizeLoop = () => {
           if (!verticalResize.active) return;
-          if (viewer.originThumb && settings.gameModePinning) {
+          if (viewer.originThumb) {
             const messageToPin = viewer.originThumb.closest(".message");
             if (messageToPin) {
               scrollMessageIntoPosition(messageToPin, { behavior: "auto" });
@@ -1558,6 +1540,7 @@
           verticalResize.animationFrameId =
             requestAnimationFrame(smoothResizeLoop);
         };
+        // --- END: MODIFIED SCRIPT ---
 
         verticalHandle.addEventListener("mousedown", (e) => {
           if (!viewer.classList.contains("full")) return;
@@ -1732,7 +1715,7 @@
           viewer.dataset.defaultHeight = viewer.style.height;
         }
 
-        if (on && settings.gameModePinning) {
+        if (on) {
           setTimeout(() => {
             requestAnimationFrame(() => {
               if (viewer && viewer.originThumb) {
@@ -1820,12 +1803,11 @@
         const wasStuck = autoStick;
         const userMessageEl = await addMessage(userText, { from: "user" });
 
+        // This logic is restored from old.html to ensure the user's new message
+        // is always scrolled into position in game mode, fixing the bug where it
+        // would sometimes be hidden by the `else` case.
         if (wasStuck) {
-          if (
-            body.classList.contains("game") &&
-            viewer &&
-            settings.gameModePinning
-          ) {
+          if (body.classList.contains("game") && viewer) {
             requestAnimationFrame(() => {
               scrollMessageIntoPosition(userMessageEl, { behavior: "smooth" });
             });
@@ -1894,22 +1876,27 @@
         }
       });
 
+      // --- START: MODIFIED SCRIPT ---
+      // Realign the message during window resize events, regardless of pinning setting.
       window.addEventListener("resize", () => {
         fitViewer();
         requestAnimationFrame(() => {
-          if (viewer && viewer.originThumb && settings.gameModePinning) {
+          if (viewer && viewer.originThumb) {
             const messageToScroll = viewer.originThumb.closest(".message");
             if (messageToScroll)
               scrollMessageIntoPosition(messageToScroll, { behavior: "auto" });
           }
         });
       });
+      // --- END: MODIFIED SCRIPT ---
 
+      // --- START: MODIFIED SCRIPT ---
+      // Realign the message after the sidebar opens/closes, regardless of pinning setting.
       qs("#sidebar").addEventListener("transitionend", (e) => {
         if (e.propertyName === "transform") {
           fitViewer();
           requestAnimationFrame(() => {
-            if (viewer && viewer.originThumb && settings.gameModePinning) {
+            if (viewer && viewer.originThumb) {
               const messageToScroll = viewer.originThumb.closest(".message");
               if (messageToScroll)
                 scrollMessageIntoPosition(messageToScroll, {
@@ -1919,6 +1906,7 @@
           });
         }
       });
+      // --- END: MODIFIED SCRIPT ---
 
       function generateRandomMultilineText() {
         const line =
@@ -1946,6 +1934,8 @@ What do you do?`
         scrollToBottom("auto");
       }
 
+      // --- START: MODIFIED SCRIPT ---
+      // Realign the message when the prompt bar resizes, regardless of pinning setting.
       function adjustViewerHeightForPrompt() {
         if (!body.classList.contains("game") || !viewer) return;
 
@@ -1965,13 +1955,14 @@ What do you do?`
         viewer.style.height = `${newHeight}px`;
 
         requestAnimationFrame(() => {
-          if (viewer.originThumb && settings.gameModePinning) {
+          if (viewer.originThumb) {
             const messageToPin = viewer.originThumb.closest(".message");
             if (messageToPin)
               scrollMessageIntoPosition(messageToPin, { behavior: "auto" });
           }
         });
       }
+      // --- END: MODIFIED SCRIPT ---
 
       let promptResizeTimeoutId = null;
 
@@ -2011,7 +2002,6 @@ What do you do?`
         resizePrompt();
       }
 
-      // --- START: MODIFIED SCRIPT ---
       function setupSettings() {
         const settingsModal = qs("#settings-modal");
         const settingsBtn = qs("#settings-btn");
@@ -2049,7 +2039,6 @@ What do you do?`
       initializeChat();
       setupPromptAutoResize();
       setupSettings();
-      // --- END: MODIFIED SCRIPT ---
     </script>
   </body>
 </html>
