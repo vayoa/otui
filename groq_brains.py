@@ -48,11 +48,6 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
     )
     messages: list[Message] = field(default_factory=list)
     default_tools: Optional[list[ChatCompletionToolParam]] = None
-    message_limit: int = 25
-    tool_message_limit: int = 1
-    query_message_limit: int = 4
-    vstore: VStore = field(init=False, default_factory=VStore)
-    latest_rag_context: Optional[list[Message]] = None
 
     @overload
     def chat(
@@ -96,75 +91,7 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
         input = list(input)
 
         model = model or self.model
-        messages = list(messages or []) or self.messages
-        messages = messages + input
-
-        if rag:
-            user_messages = [message for message in input if message["role"] == "user"]
-            if user_messages:
-                user_message = user_messages[-1]["content"]
-
-                filtered_messages = [(i, message) for i, message in enumerate(messages)]
-                last_tool_call_indices = [
-                    o[0]
-                    for o in filtered_messages
-                    if "tool_calls" in o[1]  # type: ignore
-                    and o[1]["tool_calls"][0]["function"]["name"]  # type: ignore
-                    == "generate_scene_image"
-                ][-self.tool_message_limit :]
-                last_tool_call_indices += [i + 1 for i in last_tool_call_indices]
-
-                filtered_messages = [
-                    o
-                    for o in filtered_messages
-                    if ("content" in o[1] and o[1]["role"] != "tool")
-                    or (o[0] in last_tool_call_indices)
-                ]
-
-                filtered_count = (
-                    self.message_limit
-                    - self.tool_message_limit
-                    - self.query_message_limit
-                    - 1
-                )
-                new_filtered_messages = filtered_messages[-filtered_count:]
-                first_index = (
-                    new_filtered_messages[0][0] if new_filtered_messages else 0
-                )
-                new_filtered_messages = [o[1] for o in new_filtered_messages]
-
-                if first_index > 0:
-                    query_messages = self.vstore.query(
-                        user_message,
-                        self.query_message_limit,
-                        first_index,
-                    )
-                    message = [
-                        {
-                            "role": "user",
-                            "content": "This story is loading from the middle to save memory. We already started the adventure and are in the middle of it.\nHere are some previous messages I picked for you for context:\n"
-                            + "\n".join(
-                                [
-                                    f"{message['role']}: {message['content']}"
-                                    for message in query_messages
-                                ]
-                            )
-                            + "\nAlso, do not forget to generate an image using your tool like you were ordered! You generated one for every response but I cut it to save memory and only kept the last one."
-                            + "\nWe will now resume our story from our last point.",
-                        }
-                    ]
-                    new_filtered_messages = message + new_filtered_messages
-
-                    new_filtered_messages = [
-                        filtered_messages[0][1]
-                    ] + new_filtered_messages
-
-                messages: list[Message] = new_filtered_messages  # type: ignore
-                self.latest_rag_context = messages
-                with open(
-                    r"C:\Users\ew0nd\Documents\otui\chats\_context_log.json", "w"
-                ) as f:
-                    json.dump(self.latest_rag_context, f, indent=4)
+        messages = self.prepare_messages(input, messages, rag=rag)
 
         self.add_messages(input)
 
@@ -179,26 +106,6 @@ class GroqBrain(Brain[Message, ChatCompletionToolParam]):
             tools=tools,
             tool_choice="auto",
         )
-
-    def clear_last_messages(self, n, keep=None):
-        self.vstore.delete_last(len(self.messages), n, keep)
-        super().clear_last_messages(n, keep)
-
-    def set_messages(self, messages: list[Message]):
-        self.messages = messages
-        self.vstore.purge()
-        self.vstore.add_messages(messages)
-
-    def add_messages(self, messages: list[Message]):
-        on_index = len(self.messages)
-        self.messages.extend(messages)
-        self.vstore.add_messages(messages, on_index)
-
-    def update_message_content(self, content, index):
-        if "content" in self.messages[index]:
-            self.messages[index]["content"] = content
-            if self.messages[index]["role"] != "tool":
-                self.vstore.update_content(content, index)
 
     def change_system(self, content: str):
         self.messages[0] = ChatCompletionSystemMessageParam(
