@@ -58,8 +58,8 @@ class Brain(Generic[Message, Tool]):
     model: str = field(init=False)
     messages: list[Message] = field(default_factory=list)
     default_tools: Optional[list[Tool]] = None
-    message_limit: int = 25
-    tool_message_limit: int = 1
+    message_limit: int = 250
+    tool_message_limit: Optional[int] = 1
     query_message_limit: int = 4
     vstore: VStore = field(init=False, default_factory=VStore)
     latest_rag_context: Optional[list[Message]] = None
@@ -115,13 +115,21 @@ class Brain(Generic[Message, Tool]):
                 user_message = user_messages[-1]["content"]
 
                 filtered_messages = [(i, m) for i, m in enumerate(messages)]
-                last_tool_call_indices = [
-                    i
-                    for i, m in filtered_messages
-                    if "tool_calls" in m
-                    and m["tool_calls"][0]["function"]["name"] == self.rag_tool_name
-                ][-self.tool_message_limit :]
-                last_tool_call_indices += [i + 1 for i in last_tool_call_indices]
+
+                tool_limit = self.tool_message_limit or 0
+                last_tool_call_indices = (
+                    [
+                        i
+                        for i, m in filtered_messages
+                        if "tool_calls" in m
+                        and m["tool_calls"][0]["function"]["name"]
+                        == self.rag_tool_name
+                    ][-tool_limit:]
+                    if tool_limit
+                    else []
+                )
+                if tool_limit:
+                    last_tool_call_indices += [i + 1 for i in last_tool_call_indices]
 
                 filtered_messages = [
                     o
@@ -132,7 +140,7 @@ class Brain(Generic[Message, Tool]):
 
                 filtered_count = (
                     self.message_limit
-                    - self.tool_message_limit
+                    - tool_limit
                     - self.query_message_limit
                     - 1
                 )

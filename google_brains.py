@@ -17,6 +17,7 @@ class GoogleBrain(Brain[Message, Tool]):
     model: str = "gemini-2.0-flash"
     api_key_path: str = r"C:\Users\ew0nd\Documents\otui\secrets\google.txt"
     client: genai.Client = field(init=False)
+    tool_message_limit: Optional[int] = None
 
     def __post_init__(self):
         api_key_path = Path(self.api_key_path)
