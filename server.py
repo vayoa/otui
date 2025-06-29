@@ -54,7 +54,8 @@ app.add_middleware(
 def serve_app():
     return FileResponse(HTML_DIR / "app.html")
 
-app.mount("/", StaticFiles(directory=HTML_DIR), name="static")
+# Serve static assets under /static to avoid clashing with API routes
+app.mount("/static", StaticFiles(directory=HTML_DIR), name="static")
 
 chats: Dict[str, Chat] = {}
 
