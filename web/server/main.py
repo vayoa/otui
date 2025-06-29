@@ -3,13 +3,20 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import asyncio
 import json
+import os
 from typing import Optional
 
 
 def create_app(ui) -> FastAPI:
     app = FastAPI()
 
-    app.mount("/", StaticFiles(directory="web/main page", html=True), name="static")
+    static_path = "web/main page"
+    app.mount("/static", StaticFiles(directory=static_path), name="static")
+
+    @app.get("/")
+    async def index():
+        with open(os.path.join(static_path, "app.html"), "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
 
     @app.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket):

@@ -24,6 +24,24 @@ import json
 import threading
 import time
 from img_window import ImageUpdater
+
+
+class DummyImageUpdater:
+    """Fallback image updater that does nothing when running in web mode."""
+
+    class _DummyEyes:
+        def close(self):
+            pass
+
+    def __init__(self):
+        self.eyes = DummyImageUpdater._DummyEyes()
+        self.window_title = "Image Previews"
+
+    def start_gui(self):
+        pass
+
+    def preview(self, *_, **__):
+        pass
 import pygetwindow as gw
 from groq._exceptions import APIError as GroqAPIError
 
@@ -363,18 +381,22 @@ Remember to prompt each section as if it doesn't know what happened in the story
         self.window = terminal
         self.org_win_size, self.org_win_pos = terminal.size, terminal.topleft
 
-        eyes = Eyes(default_checkpoint="waiANINSFWPONYXL_v80.safetensors")
-        # Initialize ImageUpdater for handling GUI updates
-        self.preview_window = ImageUpdater(eyes)
+        if self.args.web:
+            self.preview_window = DummyImageUpdater()
+        else:
+            eyes = Eyes(default_checkpoint="waiANINSFWPONYXL_v80.safetensors")
+            # Initialize ImageUpdater for handling GUI updates
+            self.preview_window = ImageUpdater(eyes)
 
         super().__post_init__()
 
-        # Start GUI in a separate thread
-        self.gui_thread = threading.Thread(
-            target=self.preview_window.start_gui, daemon=True
-        )
-        self.gui_thread.start()
-        time.sleep(1)
+        if not self.args.web:
+            # Start GUI in a separate thread
+            self.gui_thread = threading.Thread(
+                target=self.preview_window.start_gui, daemon=True
+            )
+            self.gui_thread.start()
+            time.sleep(1)
 
         if self.args.chatfile:
             self.brain.add_messages(self.load_messages(self.args.chatfile))
@@ -400,7 +422,8 @@ Remember to prompt each section as if it doesn't know what happened in the story
         )["title"]
 
     def on_close(self):
-        self.preview_window.eyes.close()
+        if hasattr(self.preview_window, "eyes"):
+            self.preview_window.eyes.close()
         super().on_close()
 
     def set_layout(
