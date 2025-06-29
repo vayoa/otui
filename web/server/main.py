@@ -5,6 +5,9 @@ import asyncio
 import json
 import os
 from typing import Optional
+from datetime import datetime
+
+from ui import _DEFAULT_TIME_FORMAT
 
 
 def create_app(ui) -> FastAPI:
@@ -12,6 +15,22 @@ def create_app(ui) -> FastAPI:
 
     static_path = "web/main page"
     app.mount("/static", StaticFiles(directory=static_path), name="static")
+
+    @app.get("/chats")
+    async def list_chats():
+        if not os.path.exists(ui.save_folder):
+            return {"chats": []}
+        files = [f for f in os.listdir(ui.save_folder) if f.endswith(".json")]
+        files.sort()
+        return {"chats": files}
+
+    @app.get("/chats/{name}")
+    async def get_chat(name: str):
+        file_path = os.path.join(ui.save_folder, name)
+        if not os.path.exists(file_path):
+            return []
+        with open(file_path, "r", encoding="utf-8") as f:
+            return json.load(f)
 
     @app.get("/")
     async def index():
@@ -32,9 +51,10 @@ def create_app(ui) -> FastAPI:
                     loop = asyncio.get_event_loop()
 
                     def run_stream():
-                        for chunk, _content, _tool in ui.stream(text, None):
+                        for chunk, _c, _t in ui.stream(text, None):
                             asyncio.run_coroutine_threadsafe(queue.put(chunk), loop)
                         asyncio.run_coroutine_threadsafe(queue.put("__END__"), loop)
+                        ui.save_messages()
 
                     future = loop.run_in_executor(None, run_stream)
                     while True:
@@ -48,6 +68,7 @@ def create_app(ui) -> FastAPI:
                 elif msg.get("action") == "edit_message":
                     idx = int(msg.get("index"))
                     ui.brain.update_message_content(msg.get("text", ""), idx)
+                    ui.save_messages()
                 elif msg.get("action") == "regenerate":
                     idx = int(msg.get("index"))
                     user_msg = ui.brain.messages[idx]["content"]
@@ -59,6 +80,7 @@ def create_app(ui) -> FastAPI:
                         for chunk, _c, _t in ui.stream(user_msg, None):
                             asyncio.run_coroutine_threadsafe(queue.put(chunk), loop)
                         asyncio.run_coroutine_threadsafe(queue.put("__END__"), loop)
+                        ui.save_messages()
 
                     future = loop.run_in_executor(None, run_regen)
                     while True:
@@ -71,6 +93,16 @@ def create_app(ui) -> FastAPI:
                     await future
                 elif msg.get("action") == "new_chat":
                     ui.brain.set_messages([{"role": "system", "content": ui.system}])
+                    ui.chat_filename = datetime.now().strftime(_DEFAULT_TIME_FORMAT)
+                    ui.save_messages()
+                elif msg.get("action") == "load_chat":
+                    name = msg.get("name")
+                    if name:
+                        path = os.path.join(ui.save_folder, name)
+                        if os.path.exists(path):
+                            with open(path, "r", encoding="utf-8") as f:
+                                ui.brain.set_messages(json.load(f))
+                            ui.chat_filename = name.rsplit(".", 1)[0]
         except WebSocketDisconnect:
             pass
 

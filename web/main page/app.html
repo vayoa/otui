@@ -1395,6 +1395,7 @@
           }
           const wrap = bubble.closest(".message");
           if (wrap) {
+            wrap.dataset.rawText = text;
             wrap.classList.remove("streaming");
             promptInput.disabled = false;
             sendBtn.disabled = false;
@@ -1418,7 +1419,7 @@
         });
       }
 
-      async function addMessage(text, { from = "assistant", img } = {}) {
+      async function addMessage(text, { from = "assistant", img, index } = {}) {
         if (from === "assistant" && !img) {
           img = `https://picsum.photos/seed/${Date.now()}/1024/600`;
         }
@@ -1426,7 +1427,12 @@
         wrap.className = `message ${from}`;
         wrap.style.animation = "fadeIn .2s forwards";
         wrap.dataset.rawText = text;
-        wrap.dataset.index = messageIndex++;
+        if (index !== undefined) {
+          wrap.dataset.index = index;
+          messageIndex = Math.max(messageIndex, index + 1);
+        } else {
+          wrap.dataset.index = messageIndex++;
+        }
 
         const att = document.createElement("div");
         att.className = "attachments";
@@ -2054,18 +2060,16 @@
       qs("#toggle-sidebar-btn").onclick = () =>
         body.classList.remove("sidebar-collapsed");
 
-      qs("#new-chat-btn").onclick = qs("#new-chat-icon-btn").onclick = () => {
+      qs("#new-chat-btn").onclick = qs("#new-chat-icon-btn").onclick = async () => {
         messages.innerHTML = `<div id="messages-spacer"></div>`;
-        qs("#chat-list").insertAdjacentHTML(
-          "beforeend",
-          `<li>Adventure ${qs("#chat-list").children.length + 1}</li>`
-        );
         gallery = [];
         assistantCount = 0;
+        messageIndex = 1;
         closeViewer();
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ action: "new_chat" }));
         }
+        await fetchChats();
       };
 
       window.addEventListener("keydown", (e) => {
@@ -2140,18 +2144,42 @@
         return text.join("\n\n");
       }
 
-      async function initializeChat() {
-        qs("#chat-list").innerHTML = "<li>Initial Adventure</li>";
+      async function fetchChats() {
+        const res = await fetch("/chats");
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = qs("#chat-list");
+        list.innerHTML = "";
+        data.chats.forEach((name) => {
+          const li = document.createElement("li");
+          li.dataset.name = name;
+          li.textContent = name.replace(/\.json$/, "");
+          list.appendChild(li);
+        });
+      }
 
-        await addMessage(
-          `You stand at a crossroads. A weathered signpost points in three directions.
-* To the **north**, a path leads into a dark, foreboding forest.
-* To the **east**, the road winds towards a bustling port city.
-* To the **west**, a trail disappears into rolling, sun-drenched hills.
-
-What do you do? Type \`~\` to see available commands.`
-        );
+      async function loadChat(name) {
+        const res = await fetch(`/chats/${encodeURIComponent(name)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        messages.innerHTML = `<div id="messages-spacer"></div>`;
+        gallery = [];
+        assistantCount = 0;
+        messageIndex = 0;
+        data.forEach((m, i) => {
+          if (m.role === "system") return;
+          addMessage(m.content || "", { from: m.role, index: i });
+        });
         scrollToBottom("auto");
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ action: "load_chat", name }));
+        }
+      }
+
+      async function initializeChat() {
+        messages.innerHTML = `<div id="messages-spacer"></div>`;
+        gallery = [];
+        assistantCount = 0;
       }
 
       function adjustViewerHeightForPrompt() {
@@ -2615,6 +2643,11 @@ What do you do? Type \`~\` to see available commands.`
         const url = (location.protocol === "https:" ? "wss://" : "ws://") +
           location.host + "/ws";
         ws = new WebSocket(url);
+        ws.addEventListener("open", async () => {
+          messageIndex = 1;
+          ws.send(JSON.stringify({ action: "new_chat" }));
+          await fetchChats();
+        });
       }
 
       initializeChat();
@@ -2622,6 +2655,14 @@ What do you do? Type \`~\` to see available commands.`
       setupSettings();
       setupCommandPalette();
       setupWebSocket();
+
+      qs("#chat-list").addEventListener("click", (e) => {
+        const li = e.target.closest("li[data-name]");
+        if (li) {
+          loadChat(li.dataset.name);
+          body.classList.add("sidebar-collapsed");
+        }
+      });
     </script>
   </body>
 </html>
