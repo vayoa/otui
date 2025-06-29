@@ -1117,6 +1117,12 @@ def args(**kwargs) -> argparse.Namespace:
         help="Initializes otui in POV mode.",
     )
 
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        help="Launch Roam as a web server instead of the terminal UI.",
+    )
+
     return parser.parse_args()
 
 
@@ -1126,4 +1132,11 @@ if __name__ == "__main__":
         user_args,
         system=SYSTEM,
     )
-    ui.run()
+    if user_args.web:
+        from web.server.main import create_app
+        import uvicorn
+
+        app = create_app(ui)
+        uvicorn.run(app, host="0.0.0.0", port=8000)
+    else:
+        ui.run()
