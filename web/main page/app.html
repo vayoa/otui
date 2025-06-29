@@ -1367,6 +1367,13 @@
           });
 
         const process = async () => {
+          const wrap = bubble.closest(".message");
+          if (wrap) {
+            wrap.classList.add("streaming");
+            promptInput.disabled = true;
+            sendBtn.disabled = true;
+          }
+
           while (!done || queue.length) {
             if (queue.length === 0) {
               await waitForData();
@@ -1393,9 +1400,11 @@
             }
             await new Promise((res) => setTimeout(res, 30));
           }
-          const wrap = bubble.closest(".message");
+
           if (wrap) {
             wrap.dataset.rawText = text;
+            bubble.innerHTML = "";
+            await streamText(bubble, text, { speed: 30 });
             wrap.classList.remove("streaming");
             promptInput.disabled = false;
             sendBtn.disabled = false;
@@ -1419,13 +1428,16 @@
         });
       }
 
-      async function addMessage(text, { from = "assistant", img, index } = {}) {
+      async function addMessage(
+        text,
+        { from = "assistant", img, index, animate = true } = {}
+      ) {
         if (from === "assistant" && !img) {
           img = `https://picsum.photos/seed/${Date.now()}/1024/600`;
         }
         const wrap = document.createElement("div");
         wrap.className = `message ${from}`;
-        wrap.style.animation = "fadeIn .2s forwards";
+        wrap.style.animation = animate ? "fadeIn .2s forwards" : "";
         wrap.dataset.rawText = text;
         if (index !== undefined) {
           wrap.dataset.index = index;
@@ -1532,7 +1544,7 @@
 
         if (img && viewer) openViewer(img, { animationHint: "new" });
 
-        if (from === "assistant" && text) {
+        if (from === "assistant" && text && animate) {
           wrap.classList.add("streaming");
           promptInput.disabled = true;
           sendBtn.disabled = true;
@@ -2168,7 +2180,7 @@
         messageIndex = 0;
         data.forEach((m, i) => {
           if (m.role === "system") return;
-          addMessage(m.content || "", { from: m.role, index: i });
+          addMessage(m.content || "", { from: m.role, index: i, animate: false });
         });
         scrollToBottom("auto");
         if (ws && ws.readyState === WebSocket.OPEN) {
