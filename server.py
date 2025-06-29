@@ -21,11 +21,54 @@ CHAT_DIR = Path("chats")
 CHAT_DIR.mkdir(exist_ok=True)
 HTML_DIR = Path("web/main page")
 
+TOOL_DEFS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "roll_dice",
+            "description": "Roll a dice with the given number of sides.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sides": {
+                        "type": "integer",
+                        "description": "Number of sides on the die",
+                    }
+                },
+                "required": ["sides"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_scene_image",
+            "description": "Generate an image for the scene.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string"},
+                    "danbooru": {"type": "string"},
+                    "genders": {"type": "string"},
+                    "style": {
+                        "type": "string",
+                        "enum": ["anime", "realistic"],
+                    },
+                    "dialog": {"type": "string"},
+                    "sections": {"type": "array", "items": {"type": "object"}},
+                },
+                "required": ["prompt", "danbooru", "genders", "style"],
+            },
+        },
+    },
+]
+
 class Chat:
     def __init__(self):
-        self.brain = GroqBrain()
-        if not self.brain.messages:
-            self.brain.add_messages([{"role": "system", "content": SYSTEM}])
+        self.brain = GroqBrain(
+            messages=[{"role": "system", "content": SYSTEM}],
+            default_tools=TOOL_DEFS,
+        )
         self.tools = {
             "roll_dice": self.roll_dice,
             "generate_scene_image": self.generate_scene_image,

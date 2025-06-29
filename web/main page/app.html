@@ -1454,9 +1454,14 @@
         promptInput.disabled = true;
         sendBtn.disabled = true;
         const bubble = el.querySelector(".bubble");
-        const att = el.querySelector(".attachments");
         const dec = new TextDecoder();
         let buffer = "";
+        let chain = Promise.resolve();
+        const enqueue = (txt) => {
+          chain = chain.then(() => streamText(bubble, txt, { speed: 40 }));
+          el.dataset.rawText += txt;
+        };
+
         while (true) {
           const { value, done } = await reader.read();
           if (value) {
@@ -1467,39 +1472,17 @@
               if (!part.trim()) continue;
               const data = JSON.parse(part);
               if (data.content !== undefined) {
-                bubble.textContent += data.content;
+                enqueue(data.content);
                 if (autoStick) scrollToBottom("auto", GAP_BELOW_LATEST);
               }
               if (data.tool) {
-                const t = data.tool;
-                if (t.name === "roll_dice") {
-                  const pill = document.createElement("span");
-                  pill.className = "pill";
-                  const r = t.result;
-                  pill.innerHTML = `
-              <span>🎲 D${t.args?.sides || ""} Rolled</span>
-              <span class="ellipsis">…</span>
-              <span class="number" style="color:${
-                    r <= 7 ? "red" : r <= 13 ? "yellow" : "limegreen"
-                  }">${r}</span>`;
-                  att.appendChild(pill);
-                } else if (t.name === "generate_scene_image") {
-                  const url = t.result;
-                  const wrapper = document.createElement("div");
-                  wrapper.className = "thumb";
-                  wrapper.onclick = () =>
-                    openViewer(url, { fromThumb: wrapper, animationHint: "open" });
-                  const th = document.createElement("img");
-                  th.src = url;
-                  wrapper.appendChild(th);
-                  att.appendChild(wrapper);
-                  if (!gallery.includes(url)) gallery.push(url);
-                }
+                applyTool(el, data.tool);
               }
             }
           }
           if (done) break;
         }
+        await chain;
         el.classList.remove("streaming");
         promptInput.disabled = false;
         sendBtn.disabled = false;
