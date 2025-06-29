@@ -2,10 +2,11 @@ import json
 import uuid
 from pathlib import Path
 from typing import Dict, List
+import random
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -25,6 +26,23 @@ class Chat:
         self.brain = GroqBrain()
         if not self.brain.messages:
             self.brain.add_messages([{"role": "system", "content": SYSTEM}])
+        self.tools = {
+            "roll_dice": self.roll_dice,
+            "generate_scene_image": self.generate_scene_image,
+        }
+
+    def roll_dice(self, args):
+        sides = int(args.get("sides", 6))
+        return random.randint(1, sides)
+
+    def generate_scene_image(self, args):
+        return f"https://picsum.photos/seed/{uuid.uuid4()}/1024/600"
+
+    def run_tool(self, name: str, args: dict):
+        func = self.tools.get(name)
+        if not func:
+            return None
+        return func(args)
 
     def messages(self) -> List[Message]:
         return self.brain.messages
@@ -99,14 +117,53 @@ def send_message(chat_id: str, req: SendRequest):
             raise HTTPException(status_code=404)
         chat = Chat.load(chat_id)
         chats[chat_id] = chat
+
     chat.brain.add_messages([{"role": "user", "content": req.content}])
-    answer = ""
-    for chunk in chat.brain.chat(input=req.content, stream=True):
-        delta = chunk.choices[0].delta
-        answer += delta.content or ""
-    chat.brain.add_messages([{"role": "assistant", "content": answer}])
-    chat.save(chat_id)
-    return {"content": answer}
+
+    def generate():
+        answer = ""
+        pending_tool_msgs = []
+        for chunk in chat.brain.chat(input=req.content, stream=True):
+            delta = chunk.choices[0].delta
+            if delta.tool_calls:
+                tc = delta.tool_calls[0]
+                args = json.loads(tc.function.arguments or "{}") if tc.function else {}
+                result = chat.run_tool(tc.function.name, args) if tc.function else None
+                pending_tool_msgs.append(
+                    (
+                        {
+                            "role": "assistant",
+                            "tool_calls": [
+                                {
+                                    "id": tc.id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": tc.function.name,
+                                        "arguments": tc.function.arguments,
+                                    },
+                                }
+                            ],
+                        },
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": str(result),
+                        },
+                    )
+                )
+                yield json.dumps({"tool": {"name": tc.function.name, "args": args, "result": result}}) + "\n"
+            if delta.content:
+                answer_piece = delta.content
+                answer += answer_piece
+                yield json.dumps({"content": answer_piece}) + "\n"
+
+        chat.brain.add_messages([{"role": "assistant", "content": answer}])
+        for call_m, use_m in pending_tool_msgs:
+            chat.brain.add_messages([call_m])
+            chat.brain.add_messages([use_m])
+        chat.save(chat_id)
+
+    return StreamingResponse(generate(), media_type="application/json")
 
 @app.post("/api/chats/{chat_id}/edit")
 def edit_message(chat_id: str, req: EditRequest):
@@ -134,13 +191,51 @@ def regenerate(chat_id: str):
         raise HTTPException(status_code=400)
     user_msg = chat.brain.messages[-2]["content"]
     chat.brain.clear_last_messages(1)
-    answer = ""
-    for chunk in chat.brain.chat(input=user_msg, stream=True):
-        delta = chunk.choices[0].delta
-        answer += delta.content or ""
-    chat.brain.add_messages([{"role": "assistant", "content": answer}])
-    chat.save(chat_id)
-    return {"content": answer}
+
+    def generate():
+        answer = ""
+        pending_tool_msgs = []
+        for chunk in chat.brain.chat(input=user_msg, stream=True):
+            delta = chunk.choices[0].delta
+            if delta.tool_calls:
+                tc = delta.tool_calls[0]
+                args = json.loads(tc.function.arguments or "{}") if tc.function else {}
+                result = chat.run_tool(tc.function.name, args) if tc.function else None
+                pending_tool_msgs.append(
+                    (
+                        {
+                            "role": "assistant",
+                            "tool_calls": [
+                                {
+                                    "id": tc.id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": tc.function.name,
+                                        "arguments": tc.function.arguments,
+                                    },
+                                }
+                            ],
+                        },
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": str(result),
+                        },
+                    )
+                )
+                yield json.dumps({"tool": {"name": tc.function.name, "args": args, "result": result}}) + "\n"
+            if delta.content:
+                piece = delta.content
+                answer += piece
+                yield json.dumps({"content": piece}) + "\n"
+
+        chat.brain.add_messages([{"role": "assistant", "content": answer}])
+        for call_m, use_m in pending_tool_msgs:
+            chat.brain.add_messages([call_m])
+            chat.brain.add_messages([use_m])
+        chat.save(chat_id)
+
+    return StreamingResponse(generate(), media_type="application/json")
 
 
 if __name__ == "__main__":

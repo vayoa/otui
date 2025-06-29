@@ -1355,9 +1355,6 @@
       }
 
       async function addMessage(text, { from = "assistant", img } = {}) {
-        if (from === "assistant" && !img) {
-          img = `https://picsum.photos/seed/${Date.now()}/1024/600`;
-        }
         const wrap = document.createElement("div");
         wrap.className = `message ${from}`;
         wrap.dataset.index = qsa(".message", messages).length;
@@ -1382,19 +1379,6 @@
         }
         if (from === "assistant") {
           assistantCount++;
-          if (assistantCount % 2 === 0) {
-            const r = 1 + Math.floor(Math.random() * 20);
-            const pill = document.createElement("span");
-            pill.className = "pill";
-            pill.innerHTML = `
-            <span>🎲 D20 Rolled</span>
-            <span class="ellipsis">…</span> 
-            <span class="number" style="color:${
-              r <= 7 ? "red" : r <= 13 ? "yellow" : "limegreen"
-            }">${r}</span>
-          `;
-            att.appendChild(pill);
-          }
         }
         if (att.childElementCount) wrap.appendChild(att);
 
@@ -1462,19 +1446,92 @@
 
         if (img && viewer) openViewer(img, { animationHint: "new" });
 
-        if (from === "assistant") {
-          wrap.classList.add("streaming");
-          promptInput.disabled = true;
-          sendBtn.disabled = true;
-          const bubbleEl = wrap.querySelector(".bubble");
-          await streamText(bubbleEl, text, { speed: 30 });
-          wrap.classList.remove("streaming");
-          promptInput.disabled = false;
-          sendBtn.disabled = false;
-          promptInput.focus();
-        }
-
         return wrap;
+      }
+
+      async function streamAssistantMessage(el, reader) {
+        el.classList.add("streaming");
+        promptInput.disabled = true;
+        sendBtn.disabled = true;
+        const bubble = el.querySelector(".bubble");
+        const att = el.querySelector(".attachments");
+        const dec = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { value, done } = await reader.read();
+          if (value) {
+            buffer += dec.decode(value);
+            const parts = buffer.split("\n");
+            buffer = parts.pop();
+            for (const part of parts) {
+              if (!part.trim()) continue;
+              const data = JSON.parse(part);
+              if (data.content !== undefined) {
+                bubble.textContent += data.content;
+                if (autoStick) scrollToBottom("auto", GAP_BELOW_LATEST);
+              }
+              if (data.tool) {
+                const t = data.tool;
+                if (t.name === "roll_dice") {
+                  const pill = document.createElement("span");
+                  pill.className = "pill";
+                  const r = t.result;
+                  pill.innerHTML = `
+              <span>🎲 D${t.args?.sides || ""} Rolled</span>
+              <span class="ellipsis">…</span>
+              <span class="number" style="color:${
+                    r <= 7 ? "red" : r <= 13 ? "yellow" : "limegreen"
+                  }">${r}</span>`;
+                  att.appendChild(pill);
+                } else if (t.name === "generate_scene_image") {
+                  const url = t.result;
+                  const wrapper = document.createElement("div");
+                  wrapper.className = "thumb";
+                  wrapper.onclick = () =>
+                    openViewer(url, { fromThumb: wrapper, animationHint: "open" });
+                  const th = document.createElement("img");
+                  th.src = url;
+                  wrapper.appendChild(th);
+                  att.appendChild(wrapper);
+                  if (!gallery.includes(url)) gallery.push(url);
+                }
+              }
+            }
+          }
+          if (done) break;
+        }
+        el.classList.remove("streaming");
+        promptInput.disabled = false;
+        sendBtn.disabled = false;
+        promptInput.focus();
+      }
+
+      function applyTool(el, tool) {
+        const att = el.querySelector(".attachments");
+        if (!att) return;
+        if (tool.name === "roll_dice") {
+          const r = parseInt(tool.result);
+          const pill = document.createElement("span");
+          pill.className = "pill";
+          pill.innerHTML = `
+          <span>🎲 D${tool.args?.sides || ""} Rolled</span>
+          <span class="ellipsis">…</span>
+          <span class="number" style="color:${
+            r <= 7 ? "red" : r <= 13 ? "yellow" : "limegreen"
+          }">${r}</span>`;
+          att.appendChild(pill);
+        } else if (tool.name === "generate_scene_image") {
+          const url = tool.result;
+          const wrapper = document.createElement("div");
+          wrapper.className = "thumb";
+          wrapper.onclick = () =>
+            openViewer(url, { fromThumb: wrapper, animationHint: "open" });
+          const th = document.createElement("img");
+          th.src = url;
+          wrapper.appendChild(th);
+          att.appendChild(wrapper);
+          if (!gallery.includes(url)) gallery.push(url);
+        }
       }
 
       function openViewer(src, options = {}) {
@@ -1932,8 +1989,8 @@
               `${API_BASE}/chats/${currentChatId}/regenerate`,
               { method: "POST" }
             );
-            const data = await res.json();
-            await addMessage(data.content);
+            const assistantEl = await addMessage("");
+            await streamAssistantMessage(assistantEl, res.body.getReader());
           }
         }
       });
@@ -1971,16 +2028,13 @@
         }
 
         if (currentChatId) {
-          const res = await fetch(
-            `${API_BASE}/chats/${currentChatId}/messages`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ content: userText }),
-            }
-          );
-          const data = await res.json();
-          await addMessage(data.content);
+          const res = await fetch(`${API_BASE}/chats/${currentChatId}/messages`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: userText }),
+          });
+          const assistantEl = await addMessage("");
+          await streamAssistantMessage(assistantEl, res.body.getReader());
         }
       });
 
@@ -2011,9 +2065,25 @@
         const res = await fetch(`${API_BASE}/chats/${currentChatId}`);
         const data = await res.json();
         messages.innerHTML = `<div id="messages-spacer"></div>`;
+        let pendingTool = null;
+        let lastAssistant = null;
         for (const [i, m] of data.messages.entries()) {
+          if (m.role === "assistant" && m.tool_calls) {
+            pendingTool = m.tool_calls[0];
+            continue;
+          }
+          if (m.role === "tool" && pendingTool && lastAssistant) {
+            applyTool(lastAssistant, {
+              name: pendingTool.function.name,
+              args: JSON.parse(pendingTool.function.arguments || "{}"),
+              result: m.content,
+            });
+            pendingTool = null;
+            continue;
+          }
           const el = await addMessage(m.content, { from: m.role });
           el.dataset.index = i;
+          if (m.role === "assistant") lastAssistant = el;
         }
       });
 
@@ -2577,9 +2647,25 @@
             currentChatId = chats[0].id;
             const res = await fetch(`${API_BASE}/chats/${currentChatId}`);
             const data = await res.json();
+            let pendingTool = null;
+            let lastAssistant = null;
             for (const [i, m] of data.messages.entries()) {
+              if (m.role === "assistant" && m.tool_calls) {
+                pendingTool = m.tool_calls[0];
+                continue;
+              }
+              if (m.role === "tool" && pendingTool && lastAssistant) {
+                applyTool(lastAssistant, {
+                  name: pendingTool.function.name,
+                  args: JSON.parse(pendingTool.function.arguments || "{}"),
+                  result: m.content,
+                });
+                pendingTool = null;
+                continue;
+              }
               const el = await addMessage(m.content, { from: m.role });
               el.dataset.index = i;
+              if (m.role === "assistant") lastAssistant = el;
             }
           } else {
             await initializeChat();
