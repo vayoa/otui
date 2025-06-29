@@ -1355,16 +1355,97 @@
         await streamNode(tempDiv, element);
       }
 
+      async function streamTextIncremental(
+        element,
+        markdownText,
+        state,
+        { speed = 30 } = {}
+      ) {
+        const html = marked
+          .parse(markdownText, { gfm: true, breaks: true })
+          .trim();
+
+        const tempDiv = document.createElement("div");
+        tempDiv.innerHTML = html;
+
+        let wordIndex = 0;
+
+        const streamNode = async (sourceNode, targetElement) => {
+          for (const child of Array.from(sourceNode.childNodes)) {
+            if (child.nodeType === Node.TEXT_NODE) {
+              const parts = child.textContent.split(/(\s+)/);
+              for (const part of parts) {
+                if (part.length === 0) continue;
+
+                const isSpace = part.trim().length === 0;
+                if (wordIndex < state.count) {
+                  if (isSpace) targetElement.appendChild(document.createTextNode(part));
+                  else targetElement.appendChild(document.createTextNode(part));
+                } else {
+                  if (isSpace) {
+                    targetElement.appendChild(document.createTextNode(part));
+                  } else {
+                    const span = document.createElement("span");
+                    span.textContent = part;
+                    span.style.display = "inline-block";
+                    span.style.animation = "wordFadeIn 0.4s ease-out forwards";
+                    targetElement.appendChild(span);
+                    if (autoStick) {
+                      if (body.classList.contains("game")) {
+                        const msgEl = element.closest(".message");
+                        if (msgEl)
+                          scrollMessageIntoPosition(msgEl, { behavior: "auto" });
+                      } else {
+                        scrollToBottom("auto");
+                      }
+                    }
+                    await new Promise((r) => setTimeout(r, speed));
+                  }
+                }
+                if (!isSpace) wordIndex++;
+              }
+            } else if (child.nodeType === Node.ELEMENT_NODE) {
+              const newElement = document.createElement(child.tagName);
+              for (const attr of child.attributes) {
+                newElement.setAttribute(attr.name, attr.value);
+              }
+              targetElement.appendChild(newElement);
+
+              if (autoStick) {
+                if (body.classList.contains("game")) {
+                  const msgEl = element.closest(".message");
+                  if (msgEl)
+                    scrollMessageIntoPosition(msgEl, { behavior: "auto" });
+                } else {
+                  scrollToBottom("auto");
+                }
+              }
+
+              await streamNode(child, newElement);
+            }
+          }
+        };
+
+        await streamNode(tempDiv, element);
+        state.count = wordIndex;
+      }
+
       async function streamFromSocket(bubble) {
         let text = "";
         let done = false;
         let resolve;
         const queue = [];
+        const state = { count: 0 };
 
         const waitForData = () =>
           new Promise((r) => {
             resolve = r;
           });
+
+        const render = async () => {
+          bubble.innerHTML = "";
+          await streamTextIncremental(bubble, text, state, { speed: 30 });
+        };
 
         const process = async () => {
           const wrap = bubble.closest(".message");
@@ -1385,26 +1466,11 @@
               continue;
             }
             text += chunk;
-            bubble.innerHTML = marked.parse(text, {
-              gfm: true,
-              breaks: true,
-            });
-            if (autoStick) {
-              if (body.classList.contains("game")) {
-                const msgEl = bubble.closest(".message");
-                if (msgEl)
-                  scrollMessageIntoPosition(msgEl, { behavior: "auto" });
-              } else {
-                scrollToBottom("auto");
-              }
-            }
-            await new Promise((res) => setTimeout(res, 30));
+            await render();
           }
 
           if (wrap) {
             wrap.dataset.rawText = text;
-            bubble.innerHTML = "";
-            await streamText(bubble, text, { speed: 30 });
             wrap.classList.remove("streaming");
             promptInput.disabled = false;
             sendBtn.disabled = false;
@@ -1482,7 +1548,7 @@
 
         const bubble = document.createElement("div");
         bubble.className = "bubble";
-        if (from === "user") {
+        if (from === "user" || !animate) {
           bubble.innerHTML = marked
             .parse(text, { gfm: true, breaks: true })
             .trim();
