@@ -1117,13 +1117,25 @@ def args(**kwargs) -> argparse.Namespace:
         help="Initializes otui in POV mode.",
     )
 
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        help="Launch the web server instead of the terminal UI.",
+    )
+
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     user_args = args(defaults=dict(auto_hijack=False))
-    ui = GroqBrainUI(
-        user_args,
-        system=SYSTEM,
-    )
-    ui.run()
+    if user_args.web:
+        import uvicorn
+        from server import app
+
+        uvicorn.run(app, host="0.0.0.0", port=8000)
+    else:
+        ui = GroqBrainUI(
+            user_args,
+            system=SYSTEM,
+        )
+        ui.run()

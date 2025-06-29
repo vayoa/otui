@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1.0" />
     <title>ROAM – AI Text Adventure</title>
 
-    <link rel="stylesheet" href="styleguide.css" />
+    <!-- Static assets are served under /static -->
+    <link rel="stylesheet" href="/static/styleguide.css" />
     <link
       href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap"
       rel="stylesheet"
@@ -1354,11 +1355,9 @@
       }
 
       async function addMessage(text, { from = "assistant", img } = {}) {
-        if (from === "assistant" && !img) {
-          img = `https://picsum.photos/seed/${Date.now()}/1024/600`;
-        }
         const wrap = document.createElement("div");
         wrap.className = `message ${from}`;
+        wrap.dataset.index = qsa(".message", messages).length;
         wrap.style.animation = "fadeIn .2s forwards";
         wrap.dataset.rawText = text;
 
@@ -1380,21 +1379,9 @@
         }
         if (from === "assistant") {
           assistantCount++;
-          if (assistantCount % 2 === 0) {
-            const r = 1 + Math.floor(Math.random() * 20);
-            const pill = document.createElement("span");
-            pill.className = "pill";
-            pill.innerHTML = `
-            <span>🎲 D20 Rolled</span>
-            <span class="ellipsis">…</span> 
-            <span class="number" style="color:${
-              r <= 7 ? "red" : r <= 13 ? "yellow" : "limegreen"
-            }">${r}</span>
-          `;
-            att.appendChild(pill);
-          }
         }
-        if (att.childElementCount) wrap.appendChild(att);
+        // always insert the attachments container so tools can add pills later
+        wrap.appendChild(att);
 
         const bubble = document.createElement("div");
         bubble.className = "bubble";
@@ -1460,19 +1447,80 @@
 
         if (img && viewer) openViewer(img, { animationHint: "new" });
 
-        if (from === "assistant") {
-          wrap.classList.add("streaming");
-          promptInput.disabled = true;
-          sendBtn.disabled = true;
-          const bubbleEl = wrap.querySelector(".bubble");
-          await streamText(bubbleEl, text, { speed: 30 });
-          wrap.classList.remove("streaming");
-          promptInput.disabled = false;
-          sendBtn.disabled = false;
-          promptInput.focus();
+        return wrap;
+      }
+
+      async function streamAssistantMessage(el, reader) {
+        el.classList.add("streaming");
+        promptInput.disabled = true;
+        sendBtn.disabled = true;
+        const bubble = el.querySelector(".bubble");
+        const dec = new TextDecoder();
+        let buffer = "";
+        let fullText = "";
+        bubble.innerHTML = "";
+        let chain = Promise.resolve();
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (value) {
+            buffer += dec.decode(value);
+            const parts = buffer.split("\n");
+            buffer = parts.pop();
+            for (const part of parts) {
+              if (!part.trim()) continue;
+              const data = JSON.parse(part);
+              if (data.content !== undefined) {
+                fullText += data.content;
+                chain = chain.then(() =>
+                  streamText(bubble, data.content, { speed: 30 })
+                );
+              }
+              if (data.tool) {
+                applyTool(el, data.tool);
+              }
+            }
+          }
+          if (done) break;
         }
 
-        return wrap;
+        await chain;
+        el.dataset.rawText = fullText;
+        bubble.innerHTML = marked
+          .parse(fullText, { gfm: true, breaks: true })
+          .trim();
+        el.classList.remove("streaming");
+        promptInput.disabled = false;
+        sendBtn.disabled = false;
+        promptInput.focus();
+      }
+
+      function applyTool(el, tool) {
+        const att = el.querySelector(".attachments");
+        if (!att) return;
+        if (tool.name === "roll_dice") {
+          const r = parseInt(tool.result);
+          const pill = document.createElement("span");
+          pill.className = "pill";
+          pill.innerHTML = `
+          <span>🎲 D${tool.args?.sides || ""} Rolled</span>
+          <span class="ellipsis">…</span>
+          <span class="number" style="color:${
+            r <= 7 ? "red" : r <= 13 ? "yellow" : "limegreen"
+          }">${r}</span>`;
+          att.appendChild(pill);
+        } else if (tool.name === "generate_scene_image") {
+          const url = tool.result;
+          const wrapper = document.createElement("div");
+          wrapper.className = "thumb";
+          wrapper.onclick = () =>
+            openViewer(url, { fromThumb: wrapper, animationHint: "open" });
+          const th = document.createElement("img");
+          th.src = url;
+          wrapper.appendChild(th);
+          att.appendChild(wrapper);
+          if (!gallery.includes(url)) gallery.push(url);
+        }
       }
 
       function openViewer(src, options = {}) {
@@ -1866,13 +1914,13 @@
       }
       // --- END: MODIFICATION (FIX) ---
 
-      document.addEventListener("click", (e) => {
+      document.addEventListener("click", async (e) => {
         if (e.target.matches(".edit-btn")) {
           const btn = e.target;
           const msgEl = btn.closest(".message");
           const bubble = msgEl.querySelector(".bubble");
 
-          const finishEdit = () => {
+          const finishEdit = async () => {
             const newRawText = bubble.innerText;
             msgEl.dataset.rawText = newRawText;
 
@@ -1884,6 +1932,17 @@
             btn.textContent = "Edit";
             bubble.removeEventListener("keydown", onKeydown);
             bubble.removeEventListener("focusout", onFocusOut);
+
+            if (currentChatId) {
+              await fetch(`${API_BASE}/chats/${currentChatId}/edit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  index: parseInt(msgEl.dataset.index, 10),
+                  content: newRawText,
+                }),
+              });
+            }
           };
 
           const onKeydown = (ev) => {
@@ -1912,8 +1971,17 @@
             finishEdit();
           }
         }
-        if (e.target.matches(".regenerate-btn"))
-          console.log("Regenerate", e.target.closest(".message"));
+        if (e.target.matches(".regenerate-btn")) {
+          const msgEl = e.target.closest(".message");
+          if (currentChatId) {
+            const res = await fetch(
+              `${API_BASE}/chats/${currentChatId}/regenerate`,
+              { method: "POST" }
+            );
+            const assistantEl = await addMessage("");
+            await streamAssistantMessage(assistantEl, res.body.getReader());
+          }
+        }
       });
 
       promptForm.addEventListener("submit", async (e) => {
@@ -1948,9 +2016,15 @@
           }
         }
 
-        await new Promise((r) => setTimeout(r, 700));
-
-        await addMessage(generateRandomMultilineText());
+        if (currentChatId) {
+          const res = await fetch(`${API_BASE}/chats/${currentChatId}/messages`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: userText }),
+          });
+          const assistantEl = await addMessage("");
+          await streamAssistantMessage(assistantEl, res.body.getReader());
+        }
       });
 
       qs("#collapse-sidebar-btn").onclick = () =>
@@ -1958,16 +2032,49 @@
       qs("#toggle-sidebar-btn").onclick = () =>
         body.classList.remove("sidebar-collapsed");
 
-      qs("#new-chat-btn").onclick = qs("#new-chat-icon-btn").onclick = () => {
-        messages.innerHTML = `<div id="messages-spacer"></div>`;
-        qs("#chat-list").insertAdjacentHTML(
-          "beforeend",
-          `<li>Adventure ${qs("#chat-list").children.length + 1}</li>`
+      qs("#new-chat-btn").onclick =
+        qs("#new-chat-icon-btn").onclick = async () => {
+          const resp = await fetch(`${API_BASE}/chats`, { method: "POST" });
+          const data = await resp.json();
+          currentChatId = data.id;
+          messages.innerHTML = `<div id="messages-spacer"></div>`;
+          gallery = [];
+          assistantCount = 0;
+          closeViewer();
+          await loadChats();
+        };
+
+      qs("#chat-list").addEventListener("click", async (e) => {
+        const li = e.target.closest("li[data-id]");
+        if (!li) return;
+        currentChatId = li.dataset.id;
+        qsa("#chat-list li").forEach((el) =>
+          el.classList.toggle("active", el === li)
         );
-        gallery = [];
-        assistantCount = 0;
-        closeViewer();
-      };
+        const res = await fetch(`${API_BASE}/chats/${currentChatId}`);
+        const data = await res.json();
+        messages.innerHTML = `<div id="messages-spacer"></div>`;
+        let pendingTool = null;
+        let lastAssistant = null;
+        for (const [i, m] of data.messages.entries()) {
+          if (m.role === "assistant" && m.tool_calls) {
+            pendingTool = m.tool_calls[0];
+            continue;
+          }
+          if (m.role === "tool" && pendingTool && lastAssistant) {
+            applyTool(lastAssistant, {
+              name: pendingTool.function.name,
+              args: JSON.parse(pendingTool.function.arguments || "{}"),
+              result: m.content,
+            });
+            pendingTool = null;
+            continue;
+          }
+          const el = await addMessage(m.content, { from: m.role });
+          el.dataset.index = i;
+          if (m.role === "assistant") lastAssistant = el;
+        }
+      });
 
       window.addEventListener("keydown", (e) => {
         if (qs("#command-palette").classList.contains("visible")) {
@@ -2042,17 +2149,26 @@
       }
 
       async function initializeChat() {
-        qs("#chat-list").innerHTML = "<li>Initial Adventure</li>";
-
-        await addMessage(
-          `You stand at a crossroads. A weathered signpost points in three directions.
-* To the **north**, a path leads into a dark, foreboding forest.
-* To the **east**, the road winds towards a bustling port city.
-* To the **west**, a trail disappears into rolling, sun-drenched hills.
-
-What do you do? Type \`~\` to see available commands.`
-        );
+        const resp = await fetch(`${API_BASE}/chats`, { method: "POST" });
+        const data = await resp.json();
+        currentChatId = data.id;
+        await loadChats();
         scrollToBottom("auto");
+      }
+
+      async function loadChats() {
+        const resp = await fetch(`${API_BASE}/chats`);
+        const data = await resp.json();
+        const list = qs("#chat-list");
+        list.innerHTML = "";
+        data.forEach((c, i) => {
+          const li = document.createElement("li");
+          li.dataset.id = c.id;
+          li.textContent = `Adventure ${i + 1}`;
+          if (c.id === currentChatId) li.classList.add("active");
+          list.appendChild(li);
+        });
+        return data;
       }
 
       function adjustViewerHeightForPrompt() {
@@ -2188,6 +2304,8 @@ What do you do? Type \`~\` to see available commands.`
         llm: "claude-3-sonnet",
       };
 
+      const API_BASE = "/api";
+      let currentChatId = null;
       let parsedCommands = [];
 
       function executeCommand(commandKey, args = []) {
@@ -2512,10 +2630,39 @@ What do you do? Type \`~\` to see available commands.`
         });
       }
 
-      initializeChat();
-      setupPromptAutoResize();
-      setupSettings();
-      setupCommandPalette();
+        ;(async () => {
+          const chats = await loadChats();
+          if (chats.length) {
+            currentChatId = chats[0].id;
+            const res = await fetch(`${API_BASE}/chats/${currentChatId}`);
+            const data = await res.json();
+            let pendingTool = null;
+            let lastAssistant = null;
+            for (const [i, m] of data.messages.entries()) {
+              if (m.role === "assistant" && m.tool_calls) {
+                pendingTool = m.tool_calls[0];
+                continue;
+              }
+              if (m.role === "tool" && pendingTool && lastAssistant) {
+                applyTool(lastAssistant, {
+                  name: pendingTool.function.name,
+                  args: JSON.parse(pendingTool.function.arguments || "{}"),
+                  result: m.content,
+                });
+                pendingTool = null;
+                continue;
+              }
+              const el = await addMessage(m.content, { from: m.role });
+              el.dataset.index = i;
+              if (m.role === "assistant") lastAssistant = el;
+            }
+          } else {
+            await initializeChat();
+          }
+          setupPromptAutoResize();
+          setupSettings();
+          setupCommandPalette();
+        })();
     </script>
   </body>
 </html>
