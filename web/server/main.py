@@ -29,13 +29,14 @@ def create_app(ui) -> FastAPI:
                     text = msg.get("text", "")
                     queue: asyncio.Queue[str] = asyncio.Queue()
 
+                    loop = asyncio.get_event_loop()
+
                     def run_stream():
                         for chunk, _content, _tool in ui.stream(text, None):
-                            asyncio.run_coroutine_threadsafe(queue.put(chunk), asyncio.get_event_loop())
-                        asyncio.run_coroutine_threadsafe(queue.put("__END__"), asyncio.get_event_loop())
+                            asyncio.run_coroutine_threadsafe(queue.put(chunk), loop)
+                        asyncio.run_coroutine_threadsafe(queue.put("__END__"), loop)
 
-                    loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(None, run_stream)
+                    future = loop.run_in_executor(None, run_stream)
                     while True:
                         token = await queue.get()
                         if token == "__END__":
@@ -43,6 +44,7 @@ def create_app(ui) -> FastAPI:
                             break
                         await ws.send_text(json.dumps({"type": "chunk", "data": token}))
                         await asyncio.sleep(0.03)
+                    await future
                 elif msg.get("action") == "edit_message":
                     idx = int(msg.get("index"))
                     ui.brain.update_message_content(msg.get("text", ""), idx)
@@ -51,13 +53,14 @@ def create_app(ui) -> FastAPI:
                     user_msg = ui.brain.messages[idx]["content"]
                     queue: asyncio.Queue[str] = asyncio.Queue()
 
+                    loop = asyncio.get_event_loop()
+
                     def run_regen():
                         for chunk, _c, _t in ui.stream(user_msg, None):
-                            asyncio.run_coroutine_threadsafe(queue.put(chunk), asyncio.get_event_loop())
-                        asyncio.run_coroutine_threadsafe(queue.put("__END__"), asyncio.get_event_loop())
+                            asyncio.run_coroutine_threadsafe(queue.put(chunk), loop)
+                        asyncio.run_coroutine_threadsafe(queue.put("__END__"), loop)
 
-                    loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(None, run_regen)
+                    future = loop.run_in_executor(None, run_regen)
                     while True:
                         token = await queue.get()
                         if token == "__END__":
@@ -65,6 +68,7 @@ def create_app(ui) -> FastAPI:
                             break
                         await ws.send_text(json.dumps({"type": "chunk", "data": token}))
                         await asyncio.sleep(0.03)
+                    await future
                 elif msg.get("action") == "new_chat":
                     ui.brain.set_messages([{"role": "system", "content": ui.system}])
         except WebSocketDisconnect:
