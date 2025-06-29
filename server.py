@@ -19,7 +19,7 @@ SYSTEM = (
 
 CHAT_DIR = Path("chats")
 CHAT_DIR.mkdir(exist_ok=True)
-HTML_DIR = Path("web/main page")
+HTML_DIR = Path(r"C:\Users\ew0nd\Documents\otui\web\main page")
 
 TOOL_DEFS = [
     {
@@ -63,6 +63,7 @@ TOOL_DEFS = [
     },
 ]
 
+
 class Chat:
     def __init__(self):
         self.brain = GroqBrain(
@@ -102,6 +103,7 @@ class Chat:
             chat.brain.set_messages(json.load(open(file)))
         return chat
 
+
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -115,17 +117,21 @@ app.add_middleware(
 def serve_app():
     return FileResponse(HTML_DIR / "app.html")
 
+
 # Serve static assets under /static to avoid clashing with API routes
 app.mount("/static", StaticFiles(directory=HTML_DIR), name="static")
 
 chats: Dict[str, Chat] = {}
 
+
 class SendRequest(BaseModel):
     content: str
+
 
 class EditRequest(BaseModel):
     index: int
     content: str
+
 
 @app.post("/api/chats")
 def create_chat():
@@ -135,10 +141,12 @@ def create_chat():
     chat.save(chat_id)
     return {"id": chat_id}
 
+
 @app.get("/api/chats")
 def list_chats():
     ids = [p.stem for p in CHAT_DIR.glob("*.json")]
     return [{"id": cid} for cid in ids]
+
 
 @app.get("/api/chats/{chat_id}")
 def get_chat(chat_id: str):
@@ -150,6 +158,7 @@ def get_chat(chat_id: str):
         chat = Chat.load(chat_id)
         chats[chat_id] = chat
     return {"messages": chat.messages()}
+
 
 @app.post("/api/chats/{chat_id}/messages")
 def send_message(chat_id: str, req: SendRequest):
@@ -194,7 +203,9 @@ def send_message(chat_id: str, req: SendRequest):
                         },
                     )
                 )
-                yield json.dumps({"tool": {"name": tc.function.name, "args": args, "result": result}}) + "\n"
+                yield json.dumps(
+                    {"tool": {"name": tc.function.name, "args": args, "result": result}}
+                ) + "\n"
             if delta.content:
                 answer_piece = delta.content
                 answer += answer_piece
@@ -208,6 +219,7 @@ def send_message(chat_id: str, req: SendRequest):
 
     return StreamingResponse(generate(), media_type="application/json")
 
+
 @app.post("/api/chats/{chat_id}/edit")
 def edit_message(chat_id: str, req: EditRequest):
     chat = chats.get(chat_id)
@@ -220,6 +232,7 @@ def edit_message(chat_id: str, req: EditRequest):
     chat.brain.update_message_content(req.content, req.index)
     chat.save(chat_id)
     return {"status": "ok"}
+
 
 @app.post("/api/chats/{chat_id}/regenerate")
 def regenerate(chat_id: str):
@@ -266,7 +279,9 @@ def regenerate(chat_id: str):
                         },
                     )
                 )
-                yield json.dumps({"tool": {"name": tc.function.name, "args": args, "result": result}}) + "\n"
+                yield json.dumps(
+                    {"tool": {"name": tc.function.name, "args": args, "result": result}}
+                ) + "\n"
             if delta.content:
                 piece = delta.content
                 answer += piece
