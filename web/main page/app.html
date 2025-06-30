@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1.0" />
     <title>ROAM – AI Text Adventure</title>
 
-    <link rel="stylesheet" href="styleguide.css" />
+    <link rel="stylesheet" href="static/styleguide.css" />
     <link
       href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap"
       rel="stylesheet"
@@ -20,6 +20,7 @@
     />
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="static/morphdom.min.js"></script>
 
     <style>
       :root {
@@ -1174,8 +1175,11 @@
       let prevScrollTop = messages.scrollTop;
 
       messages.addEventListener("scroll", () => {
-        if (messages.scrollTop < prevScrollTop) {
+        const goingDown = messages.scrollTop > prevScrollTop;
+        if (!goingDown) {
           autoStick = false;
+        } else if (atBottom()) {
+          autoStick = true;
         }
         prevScrollTop = messages.scrollTop;
       });
@@ -1214,7 +1218,9 @@
 
       let viewer = null,
         gallery = [],
-        assistantCount = 0;
+        assistantCount = 0,
+        ws = null,
+        messageIndex = 0;
 
       function fitViewer() {
         if (!viewer || !viewer.classList.contains("full")) return;
@@ -1353,14 +1359,165 @@
         await streamNode(tempDiv, element);
       }
 
-      async function addMessage(text, { from = "assistant", img } = {}) {
+      async function streamTextIncremental(element, markdownText, state, { speed = 30 } = {}) {
+        const html = marked
+          .parse(markdownText, { gfm: true, breaks: true })
+          .trim();
+
+        const tempDiv = document.createElement("div");
+        tempDiv.innerHTML = html;
+
+        let wordIndex = 0;
+        const buildNode = (source, target) => {
+          for (const child of Array.from(source.childNodes)) {
+            if (child.nodeType === Node.TEXT_NODE) {
+              const parts = child.textContent.split(/(\s+)/);
+              for (const part of parts) {
+                if (part.length === 0) continue;
+
+                const isSpace = part.trim().length === 0;
+                if (isSpace) {
+                  target.appendChild(document.createTextNode(part));
+                } else {
+                  const span = document.createElement("span");
+                  span.textContent = part;
+                  span.id = `w${wordIndex}`;
+                  if (wordIndex >= state.count) {
+                    span.style.display = "inline-block";
+                    span.style.opacity = 0;
+                    span.style.animation = `wordFadeIn 0.4s ease-out forwards`;
+                    span.style.animationDelay = `${(wordIndex - state.count) * speed}ms`;
+                  }
+                  target.appendChild(span);
+                  wordIndex++;
+                }
+              }
+            } else if (child.nodeType === Node.ELEMENT_NODE) {
+              const el = document.createElement(child.tagName);
+              for (const attr of child.attributes) {
+                el.setAttribute(attr.name, attr.value);
+              }
+              buildNode(child, el);
+              target.appendChild(el);
+            }
+          }
+        };
+
+        const container = document.createElement("div");
+        buildNode(tempDiv, container);
+
+        morphdom(element, container, {
+          childrenOnly: true,
+          onBeforeElUpdated: (fromEl, toEl) => {
+            if (
+              fromEl.id &&
+              fromEl.id.startsWith("w") &&
+              fromEl.id === toEl.id
+            ) {
+              if (fromEl.textContent !== toEl.textContent) {
+                fromEl.textContent = toEl.textContent;
+                fromEl.style.display = "inline-block";
+                fromEl.style.opacity = 0;
+                fromEl.style.animation = "wordFadeIn 0.4s ease-out forwards";
+              }
+              return false;
+            }
+            return true;
+          },
+        });
+
+        state.count = wordIndex;
+      }
+
+      async function streamFromSocket(bubble) {
+        let text = "";
+        let done = false;
+        let resolve;
+        const queue = [];
+        const state = { count: 0 };
+
+        const waitForData = () =>
+          new Promise((r) => {
+            resolve = r;
+          });
+
+        const render = async () => {
+          await streamTextIncremental(bubble, text, state, { speed: 30 });
+          if (autoStick) {
+            if (body.classList.contains("game") && settings.gameModePinning) {
+              const msgEl = bubble.closest(".message");
+              if (msgEl)
+                scrollMessageIntoPosition(msgEl, { behavior: "auto" });
+            } else if (!body.classList.contains("game")) {
+              scrollToBottom("auto");
+            }
+          }
+        };
+
+        const process = async () => {
+          const wrap = bubble.closest(".message");
+          if (wrap) {
+            wrap.classList.add("streaming");
+            promptInput.disabled = true;
+            sendBtn.disabled = true;
+          }
+
+          while (!done || queue.length) {
+            if (queue.length === 0) {
+              await waitForData();
+              continue;
+            }
+            const chunk = queue.shift();
+            if (chunk === "__DONE__") {
+              done = true;
+              continue;
+            }
+            text += chunk;
+            await render();
+          }
+
+          if (wrap) {
+            wrap.dataset.rawText = text;
+            wrap.classList.remove("streaming");
+            promptInput.disabled = false;
+            sendBtn.disabled = false;
+            promptInput.focus();
+          }
+        };
+
+        process();
+
+        ws.addEventListener("message", function handler(ev) {
+          const data = JSON.parse(ev.data);
+          if (data.type === "chunk") {
+            queue.push(data.data);
+            if (resolve) resolve();
+          }
+          if (data.type === "done") {
+            queue.push("__DONE__");
+            if (resolve) resolve();
+            ws.removeEventListener("message", handler);
+          }
+        });
+      }
+
+      async function addMessage(
+        text,
+        { from = "assistant", img, index, animate = true } = {}
+      ) {
         if (from === "assistant" && !img) {
           img = `https://picsum.photos/seed/${Date.now()}/1024/600`;
         }
         const wrap = document.createElement("div");
         wrap.className = `message ${from}`;
-        wrap.style.animation = "fadeIn .2s forwards";
+        wrap.style.animation = animate ? "fadeIn .2s forwards" : "";
         wrap.dataset.rawText = text;
+        if (index !== undefined) {
+          wrap.dataset.index = index;
+          messageIndex = Math.max(messageIndex, index + 1);
+        } else {
+          wrap.dataset.index = messageIndex++;
+        }
 
         const att = document.createElement("div");
         att.className = "attachments";
@@ -1398,7 +1555,7 @@
 
         const bubble = document.createElement("div");
         bubble.className = "bubble";
-        if (from === "user") {
+        if (from === "user" || !animate) {
           bubble.innerHTML = marked
             .parse(text, { gfm: true, breaks: true })
             .trim();
@@ -1460,7 +1617,7 @@
 
         if (img && viewer) openViewer(img, { animationHint: "new" });
 
-        if (from === "assistant") {
+        if (from === "assistant" && text && animate) {
           wrap.classList.add("streaming");
           promptInput.disabled = true;
           sendBtn.disabled = true;
@@ -1876,6 +2033,16 @@
             const newRawText = bubble.innerText;
             msgEl.dataset.rawText = newRawText;
 
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(
+                JSON.stringify({
+                  action: "edit_message",
+                  index: parseInt(msgEl.dataset.index),
+                  text: newRawText,
+                })
+              );
+            }
+
             bubble.contentEditable = false;
             bubble.innerHTML = marked
               .parse(newRawText, { gfm: true, breaks: true })
@@ -1912,8 +2079,21 @@
             finishEdit();
           }
         }
-        if (e.target.matches(".regenerate-btn"))
-          console.log("Regenerate", e.target.closest(".message"));
+        if (e.target.matches(".regenerate-btn")) {
+          const msgEl = e.target.closest(".message");
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(
+              JSON.stringify({
+                action: "regenerate",
+                index: parseInt(msgEl.dataset.index),
+              })
+            );
+            const bubble = msgEl.querySelector(".bubble");
+            bubble.innerHTML = "";
+            msgEl.classList.add("streaming");
+            streamFromSocket(bubble);
+          }
+        }
       });
 
       promptForm.addEventListener("submit", async (e) => {
@@ -1948,9 +2128,16 @@
           }
         }
 
-        await new Promise((r) => setTimeout(r, 700));
+        const assistantEl = await addMessage("", { from: "assistant" });
+        const bubble = assistantEl.querySelector(".bubble");
 
-        await addMessage(generateRandomMultilineText());
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(
+            JSON.stringify({ action: "send_message", text: userText })
+          );
+
+          streamFromSocket(bubble);
+        }
       });
 
       qs("#collapse-sidebar-btn").onclick = () =>
@@ -1958,15 +2145,16 @@
       qs("#toggle-sidebar-btn").onclick = () =>
         body.classList.remove("sidebar-collapsed");
 
-      qs("#new-chat-btn").onclick = qs("#new-chat-icon-btn").onclick = () => {
+      qs("#new-chat-btn").onclick = qs("#new-chat-icon-btn").onclick = async () => {
         messages.innerHTML = `<div id="messages-spacer"></div>`;
-        qs("#chat-list").insertAdjacentHTML(
-          "beforeend",
-          `<li>Adventure ${qs("#chat-list").children.length + 1}</li>`
-        );
         gallery = [];
         assistantCount = 0;
+        messageIndex = 1;
         closeViewer();
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ action: "new_chat" }));
+        }
+        await fetchChats();
       };
 
       window.addEventListener("keydown", (e) => {
@@ -2041,18 +2229,42 @@
         return text.join("\n\n");
       }
 
-      async function initializeChat() {
-        qs("#chat-list").innerHTML = "<li>Initial Adventure</li>";
+      async function fetchChats() {
+        const res = await fetch("/chats");
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = qs("#chat-list");
+        list.innerHTML = "";
+        data.chats.forEach((name) => {
+          const li = document.createElement("li");
+          li.dataset.name = name;
+          li.textContent = name.replace(/\.json$/, "");
+          list.appendChild(li);
+        });
+      }
 
-        await addMessage(
-          `You stand at a crossroads. A weathered signpost points in three directions.
-* To the **north**, a path leads into a dark, foreboding forest.
-* To the **east**, the road winds towards a bustling port city.
-* To the **west**, a trail disappears into rolling, sun-drenched hills.
-
-What do you do? Type \`~\` to see available commands.`
-        );
+      async function loadChat(name) {
+        const res = await fetch(`/chats/${encodeURIComponent(name)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        messages.innerHTML = `<div id="messages-spacer"></div>`;
+        gallery = [];
+        assistantCount = 0;
+        messageIndex = 0;
+        data.forEach((m, i) => {
+          if (m.role === "system") return;
+          addMessage(m.content || "", { from: m.role, index: i, animate: false });
+        });
         scrollToBottom("auto");
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ action: "load_chat", name }));
+        }
+      }
+
+      async function initializeChat() {
+        messages.innerHTML = `<div id="messages-spacer"></div>`;
+        gallery = [];
+        assistantCount = 0;
       }
 
       function adjustViewerHeightForPrompt() {
@@ -2512,10 +2724,30 @@ What do you do? Type \`~\` to see available commands.`
         });
       }
 
+      function setupWebSocket() {
+        const url = (location.protocol === "https:" ? "wss://" : "ws://") +
+          location.host + "/ws";
+        ws = new WebSocket(url);
+        ws.addEventListener("open", async () => {
+          messageIndex = 1;
+          ws.send(JSON.stringify({ action: "new_chat" }));
+          await fetchChats();
+        });
+      }
+
       initializeChat();
       setupPromptAutoResize();
       setupSettings();
       setupCommandPalette();
+      setupWebSocket();
+
+      qs("#chat-list").addEventListener("click", (e) => {
+        const li = e.target.closest("li[data-name]");
+        if (li) {
+          loadChat(li.dataset.name);
+          body.classList.add("sidebar-collapsed");
+        }
+      });
     </script>
   </body>
 </html>
