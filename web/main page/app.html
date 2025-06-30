@@ -1175,8 +1175,11 @@
       let prevScrollTop = messages.scrollTop;
 
       messages.addEventListener("scroll", () => {
-        if (messages.scrollTop < prevScrollTop) {
+        const goingDown = messages.scrollTop > prevScrollTop;
+        if (!goingDown) {
           autoStick = false;
+        } else if (atBottom()) {
+          autoStick = true;
         }
         prevScrollTop = messages.scrollTop;
       });
@@ -1409,9 +1412,14 @@
             if (
               fromEl.id &&
               fromEl.id.startsWith("w") &&
-              fromEl.id === toEl.id &&
-              fromEl.textContent === toEl.textContent
+              fromEl.id === toEl.id
             ) {
+              if (fromEl.textContent !== toEl.textContent) {
+                fromEl.textContent = toEl.textContent;
+                fromEl.style.display = "inline-block";
+                fromEl.style.opacity = 0;
+                fromEl.style.animation = "wordFadeIn 0.4s ease-out forwards";
+              }
               return false;
             }
             return true;
